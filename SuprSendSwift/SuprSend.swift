@@ -9,6 +9,8 @@ import Foundation
 
 /// SuprSend iOS Client
 public class SuprSend {
+    
+    public static let shared = SuprSend(publicKey: "")
 
     /// Additional configurations
     /// - Parameters:
@@ -17,14 +19,19 @@ public class SuprSend {
     public struct Options {
         /// Host URL
         public let host: String?
-        public let vapidKey: String?
+        public let enhancedSecurity: Bool
+        
+        public init(host: String?, enhancedSecurity: Bool) {
+            self.host = host
+            self.enhancedSecurity = enhancedSecurity
+        }
     }
 
-    let host: String
-    let publicKey: String
+    var host: String
+    var publicKey: String
+    private(set) var enhancedSecurity: Bool
     private(set) var distinctID: String?
     private(set) var userToken: String?
-    private let vapidKey: String
     private var apiClient: APIClient?
     private(set) var authenticateOptions: AuthenticateOptions?
 
@@ -47,9 +54,16 @@ public class SuprSend {
     ) {
         self.publicKey = publicKey
         self.host = options?.host ?? Constants.defaultHost
-        self.vapidKey = options?.vapidKey ?? String()
+        self.enhancedSecurity = options?.enhancedSecurity ?? false
     }
 
+    public func configure(publicKey: String,
+                          options: Options? = nil) {
+        self.publicKey = publicKey
+        self.host = options?.host ?? Constants.defaultHost
+        self.enhancedSecurity = options?.enhancedSecurity ?? false
+    }
+    
     /// Get the APIClient instance for this SuprSend instance.
     /// - Returns: The APIClient instance, or nil if not yet initialized.
     func client() -> APIClient {
@@ -67,13 +81,32 @@ public class SuprSend {
 
         return apiClient
     }
+    
+    func publicClient() -> APIClient {
+        if let apiClient {
+            return apiClient
+        }
+        
+        let apiClient = APIClient(config: self)
+        
+        self.apiClient = apiClient
+        
+        return apiClient
+    }
 
     /// Send an event API request with the given payload.
     /// - Parameters:
     ///   - payload: The event data to send.
     /// - Returns: The response from the API call.
     func eventApi(payload: AnyEncodable) async -> APIResponse {
-        await client().request(reqData: .init(path: "v2/event", payload: payload, type: .post))
+        let response: APIResponse = await client().request(reqData: .init(path: "v2/event", payload: payload, type: .post))
+        switch response.status {
+        case .success:
+            logger.info("\(response.body?.description ?? "SUCCESS")")
+        case .error:
+            logger.error("\(response.error?.message ?? "FAILURE")")
+        }
+        return response
     }
 
     /// Used to authenticate user. Usually called just after successful login and on reload of loggedin route to re-authenticate loggedin user.
@@ -174,7 +207,7 @@ public class SuprSend {
     ///   - event: The Event name
     ///   - properties: Properties for the event
     /// - Returns: Response from the API call
-    public func track(event: String, properties: EventProperty?) async -> APIResponse {
+    public func track(event: String, properties: EventProperty? = nil) async -> APIResponse {
         guard isIdentified(checkUserToken: true) else {
             return .error(
                 .init(type: .validation, message: "Identify User First")
@@ -197,6 +230,25 @@ public class SuprSend {
         )
 
         return await eventApi(payload: .init(event))
+    }
+    
+    func trackPublic(event: String, properties: EventProperty?) async -> APIResponse {
+        let validatedProperties: EventProperty
+        if let properties {
+            validatedProperties = Utils.shared.validateObjData(data: properties)
+        } else {
+            validatedProperties = .init()
+        }
+        
+        let event = Event(
+            event: event,
+            insertID: UUID().uuidString,
+            time: Date().timeIntervalSince1970,
+            distinctID: distinctID ?? String(),
+            properties: allProperties(merging: validatedProperties).convertToProperty()
+        )
+        let response: APIResponse = await publicClient().publicRequest(reqData: .init(path: "v2/event", payload: .init(event), type: .post))
+        return response
     }
 
     /// Handle refresh user token callback
@@ -272,7 +324,7 @@ public class SuprSend {
     /// - Parameters:
     ///   - options: Optional reset options
     /// - Returns: The response from the API call.
-    func reset(options: ResetOption? = .init(unsubscribePush: true)) async -> APIResponse {
+    public func reset(options: ResetOption? = .init(unsubscribePush: true)) async -> APIResponse {
         let unsubscribePush = options?.unsubscribePush ?? true
         if unsubscribePush {
             await push.removePushSubscription()
@@ -291,6 +343,9 @@ public class SuprSend {
         return .success()
     }
 
+    public func enableLogging() {
+        
+    }
 }
 
 extension SuprSend {

@@ -109,11 +109,11 @@ public class Preferences {
             }
         })
 
-        var url = URL(string: urlPath)!
+        var urlComponents = URLComponents(string: urlPath)!
         if let queryParams {
-            url.append(queryItems: queryParams)
+            urlComponents.queryItems = queryParams
         }
-        return url
+        return urlComponents.url!
     }
 
     /// Used to get user's whole preferences data.

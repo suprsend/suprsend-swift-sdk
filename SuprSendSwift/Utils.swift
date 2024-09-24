@@ -27,6 +27,7 @@ class Utils {
     /// - Parameter value: The string value to store.
     func setLocalStorageData(key: String, value: String) {
         UserDefaults.standard.set(value, forKey: key)
+        UserDefaults.standard.synchronize()
     }
 
     /// Removes a stored value from the local storage using the specified key.
@@ -34,6 +35,7 @@ class Utils {
     /// - Parameter key: The key to remove the value for.
     func removeLocalStorageData(key: String) {
         UserDefaults.standard.removeObject(forKey: key)
+        UserDefaults.standard.synchronize()
     }
 
     /// Decodes a JWT token into a dictionary of string-to-any values.

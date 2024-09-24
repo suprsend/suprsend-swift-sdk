@@ -1,0 +1,19 @@
+{
+    "via_suprsend" : 1,
+    "nid" : "01J4H11PVDWWTM2NN6FN62YHRG",
+    "ngid": "01J4H11PV9CFSX0PRM2F0JBGN6",
+    "ntype": "basic",
+    "aps" : {
+        "mutable-content": 1,
+        "content-available": 1,
+        "category": "mycategory",
+        "thread_identifier": "transactional",
+        "alert" : {
+            "title" : "SuprSend Test Notification",
+            "body" : "New Mission"
+        },
+        "badge" : 1
+    },
+    "image_url": "https://logospng.org/download/apple/logo-apple-256.png",
+    "Simulator Target Bundle": "suprsend.ecommerce"
+}

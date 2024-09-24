@@ -7,6 +7,10 @@
 
 import Foundation
 
-struct ResetOption {
+public struct ResetOption {
     let unsubscribePush: Bool
+    
+    public init(unsubscribePush: Bool) {
+        self.unsubscribePush = unsubscribePush
+    }
 }

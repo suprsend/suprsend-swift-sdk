@@ -11,12 +11,15 @@ import Testing
 struct SuprSendSwiftTests {
     
     @Test func testEvents() async throws {
-        let token = try MockJWTToken().generate(for: "hello@example.com")
+        let token: String = try MockJWTToken().generate(for: "hello@example.com")
         
-        let client = SuprSend(
-            publicKey: "SS.PUBK.1xIFmms8ZPywbFbbuJo55TXUNSMfrYls4DdNhH4Peto",
-            options: .init(host: "https://collector-staging.suprsend.workers.dev", vapidKey: nil)
+        SuprSend.shared.configure(
+            publicKey: "SS.PUBK.oBmt2wYUtvDLJsmsyb1FsJigN0v8ezOsC83sfFjgwks",
+            options: .init(host: "https://collector-staging.suprsend.workers.dev",
+                           enhancedSecurity: false)
         )
+        
+        let client =  SuprSend.shared
         
         let response = await client.identify(
             distinctID: "hello@example.com",

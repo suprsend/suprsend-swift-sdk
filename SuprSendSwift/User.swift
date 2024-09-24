@@ -149,7 +149,7 @@ extension User {
     /// - Parameter key: The key of the property to increment.
     /// - Parameter value: The amount to increment the property by.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
-    public func increment(key: String, value: Int) async -> APIResponse {
+    public func increment(key: String, value: Float) async -> APIResponse {
         await increment(properties: [key: value])
     }
 
@@ -159,7 +159,7 @@ extension User {
     ///
     /// - Parameter properties: An array of key-value pairs representing the properties to increment.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
-    public func increment(properties: [String: Int]) async -> APIResponse {
+    public func increment(properties: [String: Float]) async -> APIResponse {
         let event = event(type: .add, properties: properties)
         return await triggerUserEvent(event)
     }

@@ -147,6 +147,16 @@ class APIClient {
 
         return .error(.init(type: .validation, message: "User token is missing"))
     }
+    
+    func publicRequest<R: Response>(reqData: HandleRequest) async -> R {
+        do {
+            return try await requestApiInstance(reqData: reqData)
+        } catch {
+            logger.error("Error while calling API: \(error)")
+            return .error(
+                .init(type: .network, message: error.localizedDescription), statusCode: 500)
+        }
+    }
 
     /// Fetches data from the given URL using the specified method and headers.
     ///
