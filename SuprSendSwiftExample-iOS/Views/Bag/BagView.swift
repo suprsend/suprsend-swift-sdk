@@ -34,7 +34,6 @@ struct BagView: View {
     
     fileprivate func CheckOutButton() -> some View {
         Button(action: {
-            let placeOrderCloth = cartList[0]
             self.show.toggle()
         }) {
             Text("CHECKOUT")

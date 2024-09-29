@@ -7,9 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		2100F4942CA2E20D000B9131 /* SuprSendSwift.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 21955F0D2CA27CC500B205A1 /* SuprSendSwift.framework */; };
+		2100F4952CA2E20D000B9131 /* SuprSendSwift.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 21955F0D2CA27CC500B205A1 /* SuprSendSwift.framework */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		2100F4972CA2E2A2000B9131 /* SuprSendSwift.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 21955F0D2CA27CC500B205A1 /* SuprSendSwift.framework */; };
 		2137F0172CA2B52000D39C45 /* SuprSendSwiftExample-iOSNotificationService.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2137F0102CA2B52000D39C45 /* SuprSendSwiftExample-iOSNotificationService.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		2137F0212CA2B64E00D39C45 /* SuprSendSwift.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 21955F0D2CA27CC500B205A1 /* SuprSendSwift.framework */; };
-		218DB8852CA290010031B465 /* SuprSendSwift.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 21955F0D2CA27CC500B205A1 /* SuprSendSwift.framework */; };
 		218DB8882CA290690031B465 /* PartialSheet in Frameworks */ = {isa = PBXBuildFile; productRef = 218DB8872CA290690031B465 /* PartialSheet */; };
 		21955F182CA27CC500B205A1 /* SuprSendSwift.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 21955F0D2CA27CC500B205A1 /* SuprSendSwift.framework */; };
 /* End PBXBuildFile section */
@@ -39,6 +40,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		2100F4962CA2E20D000B9131 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				2100F4952CA2E20D000B9131 /* SuprSendSwift.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		2137F01C2CA2B52000D39C45 /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -130,7 +142,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2137F0212CA2B64E00D39C45 /* SuprSendSwift.framework in Frameworks */,
+				2100F4972CA2E2A2000B9131 /* SuprSendSwift.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -138,8 +150,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2100F4942CA2E20D000B9131 /* SuprSendSwift.framework in Frameworks */,
 				218DB8882CA290690031B465 /* PartialSheet in Frameworks */,
-				218DB8852CA290010031B465 /* SuprSendSwift.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -234,6 +246,7 @@
 				218DB7DF2CA28F3B0031B465 /* Frameworks */,
 				218DB7E02CA28F3B0031B465 /* Resources */,
 				2137F01C2CA2B52000D39C45 /* Embed Foundation Extensions */,
+				2100F4962CA2E20D000B9131 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -491,13 +504,12 @@
 				CODE_SIGN_ENTITLEMENTS = "SuprSendSwiftExample-iOS/SuprSendSwiftExample-iOS.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_ASSET_PATHS = "\"SuprSendSwiftExample-iOS/Preview Content\"";
 				DEVELOPMENT_TEAM = G7DJURR5RJ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "SuprSendSwiftExample-iOS/Info.plist";
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -525,13 +537,12 @@
 				CODE_SIGN_ENTITLEMENTS = "SuprSendSwiftExample-iOS/SuprSendSwiftExample-iOS.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_ASSET_PATHS = "\"SuprSendSwiftExample-iOS/Preview Content\"";
 				DEVELOPMENT_TEAM = G7DJURR5RJ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "SuprSendSwiftExample-iOS/Info.plist";
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";

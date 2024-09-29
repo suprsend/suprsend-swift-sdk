@@ -25,7 +25,11 @@ public class Push {
     ///
     /// - Returns: The push subscription as a string, or `nil` if not available.
     func getPushSubscription() async -> String? {
-        nil
+        if await notificationPermission() == .authorized {
+            await UIApplication.shared.registerForRemoteNotifications()
+            return nil
+        }
+        return nil
     }
 
     /// Updates the push subscription by adding it to the user's configuration.
@@ -73,6 +77,10 @@ public class Push {
         return .success()
     }
     
+}
+
+extension Push {
+    
     public func isSuprSendNotification(_ notification: UNNotificationResponse) -> Bool {
         isSuprSendNotificationInfo(notification.notification.request.content.userInfo)
     }
@@ -89,7 +97,7 @@ public class Push {
 extension Push {
     func trackNotificationDelivered(userInfo: [AnyHashable: Any]) async {
         if isSuprSendNotificationInfo(userInfo) {
-            await config.trackPublic(event: "$notification_delivered", properties: [
+            _ = await config.trackPublic(event: "$notification_delivered", properties: [
                 "id": userInfo["nid"] as? String
             ])
         }
@@ -97,7 +105,7 @@ extension Push {
     
     func trackNotificationClicked(userInfo: [AnyHashable: Any]) async {
         if isSuprSendNotificationInfo(userInfo) {
-            await config.trackPublic(event: "$notification_clicked", properties: [
+            _ = await config.trackPublic(event: "$notification_clicked", properties: [
                 "id": userInfo["nid"] as? String
             ])
         }
@@ -105,7 +113,7 @@ extension Push {
     
     func trackNotificationDismissed(userInfo: [AnyHashable: Any]) async {
         if isSuprSendNotificationInfo(userInfo) {
-            await config.trackPublic(event: "$notification_dismiss", properties: [
+            _ = await config.trackPublic(event: "$notification_dismiss", properties: [
                 "id": userInfo["nid"] as? String
             ])
         }
