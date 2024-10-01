@@ -100,7 +100,7 @@ public class Preferences {
     ///   - path: The path to append to the base URL. Defaults to `nil`.
     ///   - qp: Query parameters to include in the request. Defaults to an empty dictionary.
     func getUrlpath(path: String, qp: [String: Any?]? = nil) -> URL {
-        let urlPath = "v2/subscriber/\(config.distinctID ?? String())/\(path)"
+        let urlPath = "v2/subscriber/\(config.distinctID?.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String())/\(path)"
         let queryParams = qp?.compactMap({ item in
             if let value = item.value {
                 URLQueryItem(name: item.key, value: String(describing: value))
@@ -111,7 +111,7 @@ public class Preferences {
 
         var urlComponents = URLComponents(string: urlPath)!
         if let queryParams {
-            urlComponents.queryItems = queryParams
+//            urlComponents.queryItems = queryParams
         }
         return urlComponents.url!
     }
@@ -272,7 +272,8 @@ public class Preferences {
             for var subcategory in section.subcategories! {
                 if subcategory.category == category {
                     categoryData = subcategory
-                    if subcategory.isEditable {
+                    if let isEditable = subcategory.isEditable,
+                       isEditable {
                         if subcategory.preference != preference {
                             subcategory.preference = preference
                             dataUpdated = true
@@ -374,7 +375,8 @@ public class Preferences {
                     for var channelData in channels {
                         if channelData.channel == channel {
                             selectedChannelData = channelData
-                            if channelData.isEditable {
+                            if let isEditable = channelData.isEditable,
+                                isEditable {
                                 if channelData.preference != preference {
                                     channelData.preference = preference
                                     if preference == .optIn {

@@ -55,7 +55,7 @@ public class Push {
     /// Retrieves the current notification permission status.
     ///
     /// - Returns: The current notification permission status.
-    func notificationPermission() async -> UNAuthorizationStatus {
+    public func notificationPermission() async -> UNAuthorizationStatus {
         await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
     }
 

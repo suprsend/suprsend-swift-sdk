@@ -13,12 +13,12 @@ public typealias Property = AnyEncodable
 public typealias EventProperty = [String: Encodable]
 
 /// A wrapper struct that allows encoding any type that conforms to `Encodable`.
-public struct AnyEncodable: Encodable {
+public class AnyEncodable: NSObject, Encodable {
 
     private let _encode: (Encoder) throws -> Void
     /// Initializes a new `AnyEncodable` instance with a wrapped `Encodable` value.
     /// - Parameter wrapped: The `Encodable` value to wrap.
-    public init<T: Encodable>(_ wrapped: T) {
+    required public init<T: Encodable>(_ wrapped: T) {
         _encode = wrapped.encode
     }
 

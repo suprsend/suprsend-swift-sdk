@@ -31,7 +31,7 @@ public struct CategoryChannel: Codable {
     public var preference: PreferenceOptions
 
     /// Whether this category is editable or not
-    public let isEditable: Bool
+    public let isEditable: Bool?
 }
 
 public struct Category: Codable {
@@ -48,7 +48,7 @@ public struct Category: Codable {
     public var preference: PreferenceOptions
 
     /// Whether this category is editable or not
-    public let isEditable: Bool
+    public let isEditable: Bool?
 
     /// An array of subcategories (optional)
     public let channels: [CategoryChannel]?
@@ -109,6 +109,18 @@ public struct PreferenceAPIResponse: Response {
         self.statusCode = statusCode
         self.body = body
         self.error = error
+    }
+    
+    public init(from decoder: any Decoder) throws {
+//        let container = try decoder.container(keyedBy: CodingKeys.self)
+//        self.status = try container.decode(ResponseStatus.self, forKey: .status)
+//        self.statusCode = try container.decodeIfPresent(StatusCode.self, forKey: .statusCode)
+        self.body = try PreferenceData(from: decoder)
+//        self.error = try container.decodeIfPresent(ResponseError.self, forKey: .error)
+        
+        self.status = .success
+        self.statusCode = nil
+        self.error = nil
     }
 }
 

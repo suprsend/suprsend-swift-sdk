@@ -11,6 +11,8 @@
 		2100F4952CA2E20D000B9131 /* SuprSendSwift.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 21955F0D2CA27CC500B205A1 /* SuprSendSwift.framework */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2100F4972CA2E2A2000B9131 /* SuprSendSwift.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 21955F0D2CA27CC500B205A1 /* SuprSendSwift.framework */; };
 		2137F0172CA2B52000D39C45 /* SuprSendSwiftExample-iOSNotificationService.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2137F0102CA2B52000D39C45 /* SuprSendSwiftExample-iOSNotificationService.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		217DEDDF2CAB3182002C9C87 /* SuprSendSwift.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 21955F0D2CA27CC500B205A1 /* SuprSendSwift.framework */; };
+		217DEDE02CAB3182002C9C87 /* SuprSendSwift.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 21955F0D2CA27CC500B205A1 /* SuprSendSwift.framework */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		218DB8882CA290690031B465 /* PartialSheet in Frameworks */ = {isa = PBXBuildFile; productRef = 218DB8872CA290690031B465 /* PartialSheet */; };
 		21955F182CA27CC500B205A1 /* SuprSendSwift.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 21955F0D2CA27CC500B205A1 /* SuprSendSwift.framework */; };
 /* End PBXBuildFile section */
@@ -22,6 +24,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 2137F00F2CA2B52000D39C45;
 			remoteInfo = "SuprSendSwiftExample-iOSNotificationService";
+		};
+		217DEDE12CAB3182002C9C87 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 21955F042CA27CC500B205A1 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 21955F0C2CA27CC500B205A1;
+			remoteInfo = SuprSendSwift;
 		};
 		218DB8822CA28FF50031B465 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -62,10 +71,22 @@
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		217DEDE32CAB3182002C9C87 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				217DEDE02CAB3182002C9C87 /* SuprSendSwift.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		2137F0102CA2B52000D39C45 /* SuprSendSwiftExample-iOSNotificationService.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "SuprSendSwiftExample-iOSNotificationService.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		217DEDC52CAB302F002C9C87 /* SuprSendObjcExample-iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "SuprSendObjcExample-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		218DB7E22CA28F3B0031B465 /* SuprSendSwiftExample-iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "SuprSendSwiftExample-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		21955F0D2CA27CC500B205A1 /* SuprSendSwift.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = SuprSendSwift.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		21955F172CA27CC500B205A1 /* SuprSendSwiftTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SuprSendSwiftTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -85,6 +106,13 @@
 				Info.plist,
 			);
 			target = 2137F00F2CA2B52000D39C45 /* SuprSendSwiftExample-iOSNotificationService */;
+		};
+		217DEDDB2CAB3030002C9C87 /* Exceptions for "SuprSendObjcExample-iOS" folder in "SuprSendObjcExample-iOS" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 217DEDC42CAB302F002C9C87 /* SuprSendObjcExample-iOS */;
 		};
 		218DB8892CA29A120031B465 /* Exceptions for "SuprSendSwiftExample-iOS" folder in "SuprSendSwiftExample-iOS" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
@@ -109,6 +137,14 @@
 				2137F01B2CA2B52000D39C45 /* Exceptions for "SuprSendSwiftExample-iOSNotificationService" folder in "SuprSendSwiftExample-iOSNotificationService" target */,
 			);
 			path = "SuprSendSwiftExample-iOSNotificationService";
+			sourceTree = "<group>";
+		};
+		217DEDC62CAB302F002C9C87 /* SuprSendObjcExample-iOS */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				217DEDDB2CAB3030002C9C87 /* Exceptions for "SuprSendObjcExample-iOS" folder in "SuprSendObjcExample-iOS" target */,
+			);
+			path = "SuprSendObjcExample-iOS";
 			sourceTree = "<group>";
 		};
 		218DB7E32CA28F3B0031B465 /* SuprSendSwiftExample-iOS */ = {
@@ -143,6 +179,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				2100F4972CA2E2A2000B9131 /* SuprSendSwift.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		217DEDC22CAB302F002C9C87 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				217DEDDF2CAB3182002C9C87 /* SuprSendSwift.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -187,6 +231,7 @@
 				21955F1B2CA27CC500B205A1 /* SuprSendSwiftTests */,
 				218DB7E32CA28F3B0031B465 /* SuprSendSwiftExample-iOS */,
 				2137F0112CA2B52000D39C45 /* SuprSendSwiftExample-iOSNotificationService */,
+				217DEDC62CAB302F002C9C87 /* SuprSendObjcExample-iOS */,
 				2137F01F2CA2B63100D39C45 /* Frameworks */,
 				21955F0E2CA27CC500B205A1 /* Products */,
 			);
@@ -199,6 +244,7 @@
 				21955F172CA27CC500B205A1 /* SuprSendSwiftTests.xctest */,
 				218DB7E22CA28F3B0031B465 /* SuprSendSwiftExample-iOS.app */,
 				2137F0102CA2B52000D39C45 /* SuprSendSwiftExample-iOSNotificationService.appex */,
+				217DEDC52CAB302F002C9C87 /* SuprSendObjcExample-iOS.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -237,6 +283,30 @@
 			productName = "SuprSendSwiftExample-iOSNotificationService";
 			productReference = 2137F0102CA2B52000D39C45 /* SuprSendSwiftExample-iOSNotificationService.appex */;
 			productType = "com.apple.product-type.app-extension";
+		};
+		217DEDC42CAB302F002C9C87 /* SuprSendObjcExample-iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 217DEDDC2CAB3030002C9C87 /* Build configuration list for PBXNativeTarget "SuprSendObjcExample-iOS" */;
+			buildPhases = (
+				217DEDC12CAB302F002C9C87 /* Sources */,
+				217DEDC22CAB302F002C9C87 /* Frameworks */,
+				217DEDC32CAB302F002C9C87 /* Resources */,
+				217DEDE32CAB3182002C9C87 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				217DEDE22CAB3182002C9C87 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				217DEDC62CAB302F002C9C87 /* SuprSendObjcExample-iOS */,
+			);
+			name = "SuprSendObjcExample-iOS";
+			packageProductDependencies = (
+			);
+			productName = "SuprSendObjcExample-iOS";
+			productReference = 217DEDC52CAB302F002C9C87 /* SuprSendObjcExample-iOS.app */;
+			productType = "com.apple.product-type.application";
 		};
 		218DB7E12CA28F3B0031B465 /* SuprSendSwiftExample-iOS */ = {
 			isa = PBXNativeTarget;
@@ -324,6 +394,9 @@
 					2137F00F2CA2B52000D39C45 = {
 						CreatedOnToolsVersion = 16.0;
 					};
+					217DEDC42CAB302F002C9C87 = {
+						CreatedOnToolsVersion = 16.0;
+					};
 					218DB7E12CA28F3B0031B465 = {
 						CreatedOnToolsVersion = 16.0;
 					};
@@ -356,12 +429,20 @@
 				21955F162CA27CC500B205A1 /* SuprSendSwiftTests */,
 				218DB7E12CA28F3B0031B465 /* SuprSendSwiftExample-iOS */,
 				2137F00F2CA2B52000D39C45 /* SuprSendSwiftExample-iOSNotificationService */,
+				217DEDC42CAB302F002C9C87 /* SuprSendObjcExample-iOS */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		2137F00E2CA2B52000D39C45 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		217DEDC32CAB302F002C9C87 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -399,6 +480,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		217DEDC12CAB302F002C9C87 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		218DB7DE2CA28F3B0031B465 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -427,6 +515,11 @@
 			isa = PBXTargetDependency;
 			target = 2137F00F2CA2B52000D39C45 /* SuprSendSwiftExample-iOSNotificationService */;
 			targetProxy = 2137F0152CA2B52000D39C45 /* PBXContainerItemProxy */;
+		};
+		217DEDE22CAB3182002C9C87 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 21955F0C2CA27CC500B205A1 /* SuprSendSwift */;
+			targetProxy = 217DEDE12CAB3182002C9C87 /* PBXContainerItemProxy */;
 		};
 		218DB8832CA28FF50031B465 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -491,6 +584,65 @@
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		217DEDDD2CAB3030002C9C87 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = G7DJURR5RJ;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "SuprSendObjcExample-iOS/Info.plist";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = suprsend.ecommerce;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		217DEDDE2CAB3030002C9C87 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = G7DJURR5RJ;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "SuprSendObjcExample-iOS/Info.plist";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = suprsend.ecommerce;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALIDATE_PRODUCT = YES;
 			};
@@ -597,7 +749,8 @@
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_INSTALL_OBJC_HEADER = NO;
+				SWIFT_INSTALL_OBJC_HEADER = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
 				XROS_DEPLOYMENT_TARGET = 1.3;
@@ -638,7 +791,8 @@
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_INSTALL_OBJC_HEADER = NO;
+				SWIFT_INSTALL_OBJC_HEADER = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
 				XROS_DEPLOYMENT_TARGET = 1.3;
@@ -815,6 +969,15 @@
 			buildConfigurations = (
 				2137F0192CA2B52000D39C45 /* Debug */,
 				2137F01A2CA2B52000D39C45 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		217DEDDC2CAB3030002C9C87 /* Build configuration list for PBXNativeTarget "SuprSendObjcExample-iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				217DEDDD2CAB3030002C9C87 /* Debug */,
+				217DEDDE2CAB3030002C9C87 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

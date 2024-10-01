@@ -7,7 +7,6 @@
 //
 
 import UIKit
-
 import SuprSendSwift
 import UserNotifications
 
@@ -17,7 +16,7 @@ class AppDelegate: UIResponder {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         
         SuprSend.shared.configure(
-            publicKey: "SS.PUBK.oBmt2wYUtvDLJsmsyb1FsJigN0v8ezOsC83sfFjgwks",
+            publicKey: "SS.PUBK.-sxZXIxlYHbzIfKyGXCdkuX7jV4TzJHGy2u_WrGHcu8",
             options: SuprSend.Options(host: "https://collector-staging.suprsend.workers.dev", enhancedSecurity: false)
         )
         
@@ -104,5 +103,17 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
             completionHandler([.alert, .badge, .sound])
         }
     }
+}
 
+extension AppDelegate: SuprSendDeepLinkDelegate {
+    func shouldHandleSuprSendDeepLink(_ url: URL) -> Bool {
+        print("Handling URL: \(url)")
+        return true
+    }
+}
+
+extension AppDelegate: SuprSendPushNotificationDelegate {
+    func pushNotificationTapped(withCustomExtras customExtras: [AnyHashable : Any]!) {
+        print("Push Notification Tapped with Custom Extras: \(customExtras.debugDescription)")
+    }
 }

@@ -7,16 +7,24 @@
 
 import Foundation
 
+@objc public protocol SuprSendDeepLinkDelegate: AnyObject {
+    func shouldHandleSuprSendDeepLink(_ url: URL) -> Bool
+}
+
+@objc public protocol SuprSendPushNotificationDelegate: AnyObject {
+    func pushNotificationTapped(withCustomExtras customExtras: [AnyHashable : Any]!)
+}
+
 /// SuprSend iOS Client
-public class SuprSend {
+public class SuprSend: NSObject {
     
-    public static let shared = SuprSend(publicKey: "")
+    @objc(sharedInstance) public static let shared = SuprSend(publicKey: "")
 
     /// Additional configurations
     /// - Parameters:
     ///   - host: Host URL
     ///   - vapidKey: VAPID key
-    public struct Options {
+    public class Options: NSObject {
         /// Host URL
         public let host: String?
         public let enhancedSecurity: Bool
@@ -40,9 +48,14 @@ public class SuprSend {
 
     /// Push instance
     public private(set) lazy var push = Push(config: self)
+    
+    /// Preferences instance
+    public private(set) lazy var preferences = Preferences(config: self)
 
     let emitter = Emitter()
     private var userTokenExpirationTimer: Timer?
+    
+    private var urlDelegate: SuprSendDeepLinkDelegate?
 
     /// Create SuprSend instance
     /// - Parameters:
@@ -57,11 +70,15 @@ public class SuprSend {
         self.enhancedSecurity = options?.enhancedSecurity ?? false
     }
 
-    public func configure(publicKey: String,
+    @objc public func configure(publicKey: String,
                           options: Options? = nil) {
         self.publicKey = publicKey
         self.host = options?.host ?? Constants.defaultHost
         self.enhancedSecurity = options?.enhancedSecurity ?? false
+    }
+    
+    @objc public func setDeepLinkDelegate(_ urlDelegate: SuprSendDeepLinkDelegate) {
+        self.urlDelegate = urlDelegate
     }
     
     /// Get the APIClient instance for this SuprSend instance.
@@ -343,8 +360,8 @@ public class SuprSend {
         return .success()
     }
 
-    public func enableLogging() {
-        
+    @objc public func enableLogging() {
+        // TODO: Add Logging
     }
 }
 

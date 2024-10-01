@@ -175,7 +175,9 @@ class APIClient {
         var request = URLRequest(url: url)
         request.httpMethod = method.rawValue
         request.allHTTPHeaderFields = headers
-        request.httpBody = try JSONEncoder().encode(body)
+        if let body {
+            request.httpBody = try JSONEncoder().encode(body)
+        }
 
         let (data, response) = try await URLSession.shared.data(for: request)
 

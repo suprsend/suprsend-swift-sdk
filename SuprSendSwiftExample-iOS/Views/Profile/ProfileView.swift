@@ -17,6 +17,9 @@ struct ProfileView: View {
     @State var selection: Int? = nil
     let arrProfile = ProfileModel.all()
     
+    @State var isMyOrdersPresented: Bool = false
+    @State var isPreferencesPresented: Bool = false
+    
     fileprivate func NavigationBarView() -> some View {
         return HStack {
             Text("")
@@ -54,7 +57,17 @@ struct ProfileView: View {
                 ScrollView(.vertical, showsIndicators: false, content: {
                     VStack(spacing: 10) {
                         ForEach(self.arrProfile, id: \.id) { profile in
-                            ProfileRow(profile: profile)
+                            if profile.title == "Preferences" {
+                                NavigationLink(destination: PreferencesView(), isActive: self.$isPreferencesPresented) {
+                                    ProfileRow(profile: profile)
+                                }
+                            } else if profile.title == "My Orders" {
+                                NavigationLink(destination: MyOrdersView(), isActive: self.$isMyOrdersPresented) {
+                                    ProfileRow(profile: profile)
+                                }
+                            } else {
+                                ProfileRow(profile: profile)
+                            }
                         }
                     }
                     .padding(.horizontal, 15)
@@ -98,15 +111,17 @@ struct ProfileRow: View {
                     .foregroundColor(.secondary)
             }
             .onTapGesture {
-                Task { @MainActor in
-                    CommonAnalyticsHandler.unset(key: "choices")
-                    if profile.title == "Logout(unsubscribe Push)" {
-                        await CommonAnalyticsHandler.reset(unsubscribePushNotification: true)
-                    } else {
-                        await CommonAnalyticsHandler.reset(unsubscribePushNotification: false)
+                if profile.title.contains("Logout") {
+                    Task { @MainActor in
+                        CommonAnalyticsHandler.unset(key: "choices")
+                        if profile.title == "Logout(unsubscribe Push)" {
+                            await CommonAnalyticsHandler.reset(unsubscribePushNotification: true)
+                        } else {
+                            await CommonAnalyticsHandler.reset(unsubscribePushNotification: false)
+                        }
+                        CommonAnalyticsHandler.unSetSuperProperties(key: "user_type")
+                        self.isLoggedIn.toggle()
                     }
-                    CommonAnalyticsHandler.unSetSuperProperties(key: "user_type")
-                    self.isLoggedIn.toggle()
                 }
             }
             .padding(15)

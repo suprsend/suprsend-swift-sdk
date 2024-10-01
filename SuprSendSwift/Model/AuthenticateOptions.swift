@@ -10,7 +10,7 @@ import Foundation
 public typealias RefreshTokenCallback = (_ oldUserToken: String, _ tokenPayload: [String: Any])
     async throws -> String?
 
-public struct AuthenticateOptions {
+public class AuthenticateOptions {
     /// The callback to refresh the user token.
     let refreshUserToken: RefreshTokenCallback
     

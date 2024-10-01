@@ -81,7 +81,7 @@ public enum ErrorType: String, Codable {
 /// This struct is used to represent a response from an API, and provides a way
 /// to encapsulate the status, status code, body, and error information in a single
 /// struct.
-public struct APIResponse: Response {
+public class APIResponse: NSObject, Response {
     /// The status of the response (e.g. success or error).
     public let status: ResponseStatus
 
@@ -94,7 +94,7 @@ public struct APIResponse: Response {
     /// Any error that occurred during the request.
     public let error: ResponseError?
 
-    public init(
+    required public init(
         status: ResponseStatus,
         statusCode: StatusCode?,
         body: ResponseBody?,
