@@ -23,7 +23,7 @@ public enum ChannelLevelPreferenceOptions: String, Codable {
     case required = "required"
 }
 
-public struct CategoryChannel: Codable {
+public class CategoryChannel: Codable {
     /// The name of the channel
     public let channel: String
 
@@ -31,10 +31,16 @@ public struct CategoryChannel: Codable {
     public var preference: PreferenceOptions
 
     /// Whether this category is editable or not
-    public let isEditable: Bool?
+    public let isEditable: Bool
+    
+    enum CodingKeys: String, CodingKey {
+        case channel
+        case preference
+        case isEditable = "is_editable"
+    }
 }
 
-public struct Category: Codable {
+public class Category: Codable {
     /// The name of the category
     public let name: String
 
@@ -46,15 +52,28 @@ public struct Category: Codable {
 
     /// The preference for this category
     public var preference: PreferenceOptions
+    
+    /// The preference for this category
+//    public var originalPreference: PreferenceOptions
 
     /// Whether this category is editable or not
-    public let isEditable: Bool?
+    public let isEditable: Bool
 
     /// An array of subcategories (optional)
     public let channels: [CategoryChannel]?
+    
+    enum CodingKeys: String, CodingKey {
+        case name
+        case category
+        case description
+        case preference
+//        case originalPreference = "original_preference"
+        case isEditable = "is_editable"
+        case channels
+    }
 }
 
-public struct Section: Codable {
+public class Section: Codable {
     /// The name of the section (optional)
     public let name: String?
 
@@ -65,20 +84,30 @@ public struct Section: Codable {
     public let subcategories: [Category]?
 }
 
-public struct ChannelPreference: Codable {
+public class ChannelPreference: Codable {
     /// The name of the channel
     public let channel: String
 
     /// Whether this channel is restricted or not
     public var isRestricted: Bool
+    
+    enum CodingKeys: String, CodingKey {
+        case channel
+        case isRestricted = "is_restricted"
+    }
 }
 
-public struct PreferenceData: Codable {
+public class PreferenceData: Codable {
     /// An array of sections within this preference data (optional)
     public let sections: [Section]?
 
     /// An array of channel preferences (optional)
     public let channelPreferences: [ChannelPreference]?
+    
+    enum CodingKeys: String, CodingKey {
+        case sections
+        case channelPreferences = "channel_preferences"
+    }
 }
 
 public struct PreferenceAPIResponse: Response {
@@ -137,5 +166,17 @@ struct RequestPayload: Codable {
 
         /// The `opt_out_channels` key in the JSON dictionary (optional)
         case optOutChannels = "opt_out_channels"
+    }
+}
+
+
+struct ChannelRequestPayload: Codable {
+    /// An array of channel preferences (optional)
+    public let channelPreferences: [ChannelPreference]
+    
+    enum CodingKeys: String, CodingKey {
+        
+        /// The `channel_preferences` key in the JSON dictionary (optional)
+        case channelPreferences = "channel_preferences"
     }
 }

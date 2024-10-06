@@ -17,10 +17,15 @@ struct CommonAnalyticsHandler {
     static func identify(identity: String) {
         Task { @MainActor in
             let token = await getToken(for: identity)
-            await SuprSend.shared.identify(distinctID: identity, userToken: token, options: AuthenticateOptions(refreshUserToken: { oldUserToken, tokenPayload in
+            _ = await SuprSend.shared.identify(distinctID: identity, userToken: token, options: AuthenticateOptions(refreshUserToken: { oldUserToken, tokenPayload in
                 await getToken(for: identity)
             }))
-            await SuprSend.shared.user.addEmail(identity)
+        }
+    }
+    
+    static func addEmail(_ email: String) {
+        Task {
+            await SuprSend.shared.user.addEmail(email)
         }
     }
     

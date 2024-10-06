@@ -11,11 +11,24 @@ import Combine
 
 class PreferenceViewModel: ObservableObject {
     @Published var isLoading: Bool
-    @Published var preferenceData: PreferenceData?
+    private var preferenceData: PreferenceData? {
+        didSet {
+            categories = preferenceData?.sections?.first?.subcategories ?? []
+            channels = preferenceData?.channelPreferences ?? []
+        }
+    }
+    @Published var categories: [SuprSendSwift.Category] = []
+    @Published var channels: [SuprSendSwift.ChannelPreference] = []
     
     init() {
         isLoading = true
         fetchAll()
+        
+        SuprSend.shared.emitter.on(.preferencesUpdated) { data in
+            DispatchQueue.main.async {
+                self.preferenceData = data?.body
+            }
+        }
     }
 }
 

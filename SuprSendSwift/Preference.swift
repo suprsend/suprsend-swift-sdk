@@ -54,7 +54,7 @@ public class Preferences {
     private let debouncedUpdateCategoryPreferences = PassthroughSubject<
         UpdateCategoryParams, Never
     >()
-    private let debouncedUpdateChannelPreferences = PassthroughSubject<RequestPayload, Never>()
+    private let debouncedUpdateChannelPreferences = PassthroughSubject<ChannelRequestPayload, Never>()
     private var cancellables = Set<AnyCancellable>()
 
     /// The current preference data.
@@ -211,13 +211,14 @@ public class Preferences {
             config.emitter.emit(event: .preferencesError, data: response)
         } else {
             //            subCategory = response.body
+            let response = await getPreferences(args: preferenceArgs)
             config.emitter.emit(event: .preferencesUpdated, data: response)
         }
 
         return response
     }
 
-    private func _updateChannelPreferences(body: RequestPayload) async -> PreferenceAPIResponse {
+    private func _updateChannelPreferences(body: ChannelRequestPayload) async -> PreferenceAPIResponse {
         let path = getUrlpath(path: "channel_preference")
 
         let response: PreferenceAPIResponse = await config.client().request(
@@ -230,7 +231,7 @@ public class Preferences {
         if response.error != nil {
             config.emitter.emit(event: .preferencesError, data: response)
         } else {
-            _ = await getPreferences(args: preferenceArgs)
+            let response = await getPreferences(args: preferenceArgs)
             config.emitter.emit(event: .preferencesUpdated, data: response)
         }
         return response
@@ -269,11 +270,10 @@ public class Preferences {
                 continue
             }
 
-            for var subcategory in section.subcategories! {
+            for subcategory in section.subcategories! {
                 if subcategory.category == category {
                     categoryData = subcategory
-                    if let isEditable = subcategory.isEditable,
-                       isEditable {
+                    if subcategory.isEditable {
                         if subcategory.preference != preference {
                             subcategory.preference = preference
                             dataUpdated = true
@@ -298,7 +298,7 @@ public class Preferences {
             return .error(.init(type: .validation, message: "Category not found"))
         }
 
-        if dataUpdated {
+        if !dataUpdated {
             return .success(statusCode: nil, body: data)
         }
 
@@ -375,8 +375,7 @@ public class Preferences {
                     for var channelData in channels {
                         if channelData.channel == channel {
                             selectedChannelData = channelData
-                            if let isEditable = channelData.isEditable,
-                                isEditable {
+                            if channelData.isEditable {
                                 if channelData.preference != preference {
                                     channelData.preference = preference
                                     if preference == .optIn {
@@ -414,7 +413,7 @@ public class Preferences {
             return .error(.init(type: .validation, message: "Category's channel not found"))
         }
 
-        if dataUpdated {
+        if !dataUpdated {
             return .success(body: data)
         }
 
@@ -433,8 +432,15 @@ public class Preferences {
 
         let requestPayload = RequestPayload(
             preference: categoryPreference, optOutChannels: optOutChannels)
-
-        debouncedUpdateChannelPreferences.send(requestPayload)
+        
+        debouncedUpdateCategoryPreferences.send(
+            .init(
+                category: category,
+                body: requestPayload,
+                subCategory: categoryData,
+                args: args
+            )
+        )
 
         return .success(body: data)
     }
@@ -446,7 +452,7 @@ public class Preferences {
     ///   - preference: The new preference value. Defaults to `nil`.
     public func updateOverallChannelPreference(
         channel: String, preference: ChannelLevelPreferenceOptions
-    ) async -> PreferenceAPIResponse {
+    ) -> PreferenceAPIResponse {
 
         guard let data else {
             return .error(
@@ -463,7 +469,7 @@ public class Preferences {
         var dataUpdated = false
         let preferenceRestricted = preference == .required
 
-        for var channelItem in channelPreferences {
+        for channelItem in channelPreferences {
             if channelItem.channel == channel {
                 channelData = channelItem
                 if channelItem.isRestricted != preferenceRestricted {
@@ -474,16 +480,17 @@ public class Preferences {
             }
         }
 
-        guard channelData != nil else {
+        guard let channelData else {
             return .error(.init(type: .validation, message: "Channel data not found."))
         }
 
-        if dataUpdated {
+        if !dataUpdated {
             return .success(body: data)
         }
-
-        // TODO: Call debounce API
-        //        debouncedUpdateChannelPreferences.send()
+        
+        let requestPayload = ChannelRequestPayload(channelPreferences: [channelData])
+        
+        debouncedUpdateChannelPreferences.send(requestPayload)
 
         return .success(body: data)
     }

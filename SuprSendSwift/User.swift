@@ -261,6 +261,7 @@ extension User {
                 .pushVendor: Constants.pushVendor,
             ]
         )
+        config.deviceToken = token
         return await triggerUserEvent(event)
     }
 

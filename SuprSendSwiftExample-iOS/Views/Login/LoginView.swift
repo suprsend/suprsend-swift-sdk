@@ -80,6 +80,7 @@ struct LoginView: View {
                 Button(action: {
                     if(!email.isEmpty){
                         CommonAnalyticsHandler.identify(identity: email)
+                        CommonAnalyticsHandler.addEmail(email)
                         CommonAnalyticsHandler.increment(key: "login_count",value: 1)
                         CommonAnalyticsHandler.setOnce(key: "first_login_at", value: Date().formatDate())
                         CommonAnalyticsHandler.setSuperProperties(key: "user_type", value: "user")

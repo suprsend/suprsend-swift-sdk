@@ -39,6 +39,7 @@ public class SuprSend: NSObject {
     var publicKey: String
     private(set) var enhancedSecurity: Bool
     private(set) var distinctID: String?
+    var deviceToken: String?
     private(set) var userToken: String?
     private var apiClient: APIClient?
     private(set) var authenticateOptions: AuthenticateOptions?
@@ -52,7 +53,7 @@ public class SuprSend: NSObject {
     /// Preferences instance
     public private(set) lazy var preferences = Preferences(config: self)
 
-    let emitter = Emitter()
+    public let emitter = Emitter()
     private var userTokenExpirationTimer: Timer?
     
     private var urlDelegate: SuprSendDeepLinkDelegate?
@@ -353,7 +354,7 @@ public class SuprSend: NSObject {
 
         Utils.shared.removeLocalStorageData(key: Constants.authenticatedDistinctID)
 
-        if options?.unsubscribePush == true {
+        if unsubscribePush {
             // TODO: Expire timer for reset token
         }
 

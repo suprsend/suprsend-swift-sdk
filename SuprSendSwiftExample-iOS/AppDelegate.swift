@@ -16,13 +16,14 @@ class AppDelegate: UIResponder {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         
         SuprSend.shared.configure(
-            publicKey: "SS.PUBK.-sxZXIxlYHbzIfKyGXCdkuX7jV4TzJHGy2u_WrGHcu8",
-            options: SuprSend.Options(host: "https://collector-staging.suprsend.workers.dev", enhancedSecurity: false)
+            publicKey: SuprSendConstants.publicKey,
+            options: SuprSend.Options(host: SuprSendConstants.host, enhancedSecurity: false)
         )
         
         SuprSend.shared.enableLogging()
-        
-        if let email = UserDefaults.standard.string(forKey: "email") {
+        let isLoggedIn = UserDefaults.standard.bool(forKey: "isLoggedIn")
+        if isLoggedIn,
+           let email = UserDefaults.standard.string(forKey: "email") {
             CommonAnalyticsHandler.identify(identity: email)
         }
 

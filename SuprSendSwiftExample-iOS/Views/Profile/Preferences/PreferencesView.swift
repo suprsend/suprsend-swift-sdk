@@ -10,77 +10,127 @@ import SuprSendSwift
 
 struct PreferencesView: View {
     
-    @StateObject var preferenceViewModel = PreferenceViewModel()
-    @State private var favoriteColor = "Category"
+    @StateObject var viewModel = PreferenceViewModel()
+    @State private var selectedTab = "Category"
     var colors = ["Category", "Channel"]
-
-    var section: SuprSendSwift.Section? {
-        self.preferenceViewModel.preferenceData?.sections?.first
-    }
     
-    var channels: [ChannelPreference] {
-        self.preferenceViewModel.preferenceData?.channelPreferences ?? []
-    }
-    
-    func name(at index: Int) -> String {
-        section?.subcategories?[index].name ?? ""
-    }
-    
-    func channels(at index: Int) -> [CategoryChannel] {
-        section?.subcategories?[index].channels ?? []
-    }
-    
-    var range: Range<Int> {
-        0..<(section?.subcategories?.count ?? 0)
-    }
-    
-    var channelRange: Range<Int> {
-        0..<channels.count
-    }
-    
-    func channelName(at index: Int) -> String {
-        channels[index].channel
-    }
+    @State private var selection = Set<String>()
     
     var body: some View {
         NavigationView {
+            
             VStack(alignment: .leading) {
-                if self.preferenceViewModel.isLoading {
+                if viewModel.isLoading {
                     Text("loading...")
                 } else {
-                    Picker("What is your favorite color?", selection: $favoriteColor) {
-                        ForEach(colors, id: \.self) {
-                            Text($0)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .padding()
-                    
-                    if favoriteColor == "Category" {
-                        List(range) { index in
-                            Section(header: Text(name(at: index))) {
-                                ForEach(channels(at: index), id: \.channel) { item in
-                                    Toggle(item.channel, isOn: .constant(item.preference == .optIn))
-                                }
-                            }
-                            .headerProminence(.increased)
+                    if selectedTab == "Category" {
+                        List($viewModel.categories, id: \.category) { category in
+                            CategoryView(category: category.wrappedValue)
                         }
                     } else {
-                        List(channelRange) { index in
-                            Section(header: Text(channelName(at: index))) {
-                                Toggle("All", isOn: .constant(!channels[index].isRestricted))
-                                Toggle("Required", isOn: .constant(channels[index].isRestricted))
+                        List($viewModel.channels, id: \.channel) { item in
+                            Section(header: Text(item.wrappedValue.channel)) {
+                                RadioView(channel: item.wrappedValue)
                             }
                             .headerProminence(.increased)
                         }
                     }
                 }
-                
-                Spacer()
             }
             .navigationBarTitle(Text("Notification Preferences"), displayMode: .inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Picker("Preferences", selection: $selectedTab) {
+                        ForEach(colors, id: \.self) {
+                            Text($0)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+            }
             .navigationBarHidden(false)
             .navigationBarBackButtonHidden(true)
         }
+    }
+}
+
+struct CategoryView: View {
+    
+    @State var isOn: Bool
+    var category: SuprSendSwift.Category
+    
+    init(category: SuprSendSwift.Category) {
+        isOn = category.preference == .optIn
+        self.category = category
+    }
+    
+    var body: some View {
+        Section(header: Toggle(category.name, isOn: $isOn)
+            .onChange(
+                of: isOn,
+                perform: { value in
+                    print("Toggle value: \(value)")
+                    _ = SuprSend.shared.preferences.updateCategoryPreference(category: category.category, preference: value ? .optIn : .optOut)
+                })
+                .disabled(!category.isEditable)
+        ) {
+            ForEach(category.channels ?? [], id: \.channel) { item in
+                ToggleView(channel: item, category: category.category)
+            }
+        }
+        .headerProminence(.increased)
+    }
+}
+
+struct RadioView: View {
+    var channel: ChannelPreference
+    @State var selection: ChannelLevelPreferenceOptions
+    
+    init(channel: ChannelPreference) {
+        self.channel = channel
+        self.selection = channel.isRestricted ? .required : .all
+    }
+    
+    var body: some View {
+        Picker(selection: $selection, label: Text(channel.channel)) {
+            Text("All").tag(ChannelLevelPreferenceOptions.all)
+            Text("Required").tag(ChannelLevelPreferenceOptions.required)
+        }.pickerStyle(.automatic)
+            .onChange(of: selection) { value in
+                _ = SuprSend.shared.preferences.updateOverallChannelPreference(
+                    channel: channel.channel,
+                    preference: selection
+                )
+            }
+    }
+}
+
+struct ToggleView: View {
+    let category: String
+    let channel: CategoryChannel
+    @State var isOn: Bool
+    
+    init(channel: CategoryChannel, category: String) {
+        self.channel = channel
+        self.category = category
+        self.isOn = channel.preference == .optIn
+    }
+    
+    var body: some View {
+        Toggle(channel.channel, isOn: $isOn)
+            .onChange(
+                of: isOn,
+                perform: { value in
+                    print("Toggle value: \(value)")
+                    Task {
+                        await SuprSend.shared.preferences.updateChannelPreferenceInCategory(
+                            channel: channel.channel,
+                            preference: value ? .optIn : .optOut,
+                            category: category,
+                            args: nil
+                        )
+                }
+            })
+            .disabled(!channel.isEditable)
     }
 }

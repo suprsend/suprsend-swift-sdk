@@ -13,18 +13,24 @@ import UIKit
 public class Push {
     /// The configuration instance used to manage user data.
     private let config: SuprSend
+    
+    private let queue: PushQueue
 
     /// Initializes a new `Push` instance with the given configuration.
     ///
     /// - Parameter config: The configuration instance to use.
     init(config: SuprSend) {
         self.config = config
+        self.queue = PushQueue(config: config)
     }
 
     /// Retrieves the push subscription, if available.
     ///
     /// - Returns: The push subscription as a string, or `nil` if not available.
     func getPushSubscription() async -> String? {
+        if let token = config.deviceToken {
+            return token
+        }
         if await notificationPermission() == .authorized {
             await UIApplication.shared.registerForRemoteNotifications()
             return nil
@@ -96,26 +102,23 @@ extension Push {
 
 extension Push {
     func trackNotificationDelivered(userInfo: [AnyHashable: Any]) async {
-        if isSuprSendNotificationInfo(userInfo) {
-            _ = await config.trackPublic(event: "$notification_delivered", properties: [
-                "id": userInfo["nid"] as? String
-            ])
+        if isSuprSendNotificationInfo(userInfo),
+            let nid = userInfo["nid"] as? String {
+            queue.push(.init(event: "$notification_delivered", nid: nid))
         }
     }
     
     func trackNotificationClicked(userInfo: [AnyHashable: Any]) async {
-        if isSuprSendNotificationInfo(userInfo) {
-            _ = await config.trackPublic(event: "$notification_clicked", properties: [
-                "id": userInfo["nid"] as? String
-            ])
+        if isSuprSendNotificationInfo(userInfo),
+           let nid = userInfo["nid"] as? String {
+            queue.push(.init(event: "$notification_clicked", nid: nid))
         }
     }
     
     func trackNotificationDismissed(userInfo: [AnyHashable: Any]) async {
-        if isSuprSendNotificationInfo(userInfo) {
-            _ = await config.trackPublic(event: "$notification_dismiss", properties: [
-                "id": userInfo["nid"] as? String
-            ])
+        if isSuprSendNotificationInfo(userInfo),
+           let nid = userInfo["nid"] as? String {
+            queue.push(.init(event: "$notification_dismiss", nid: nid))
         }
     }
 }

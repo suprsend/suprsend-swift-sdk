@@ -128,6 +128,13 @@
 			);
 			target = 21955F0C2CA27CC500B205A1 /* SuprSendSwift */;
 		};
+		21BA2AC32CB26AA8003D2BA9 /* Exceptions for "SuprSendSwiftExample-iOS" folder in "SuprSendSwiftExample-iOSNotificationService" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				SuprSendConstants.swift,
+			);
+			target = 2137F00F2CA2B52000D39C45 /* SuprSendSwiftExample-iOSNotificationService */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -151,6 +158,7 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				218DB8892CA29A120031B465 /* Exceptions for "SuprSendSwiftExample-iOS" folder in "SuprSendSwiftExample-iOS" target */,
+				21BA2AC32CB26AA8003D2BA9 /* Exceptions for "SuprSendSwiftExample-iOS" folder in "SuprSendSwiftExample-iOSNotificationService" target */,
 			);
 			path = "SuprSendSwiftExample-iOS";
 			sourceTree = "<group>";
@@ -656,7 +664,7 @@
 				CODE_SIGN_ENTITLEMENTS = "SuprSendSwiftExample-iOS/SuprSendSwiftExample-iOS.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_ASSET_PATHS = "\"SuprSendSwiftExample-iOS/Preview Content\"";
 				DEVELOPMENT_TEAM = G7DJURR5RJ;
 				ENABLE_PREVIEWS = YES;
@@ -689,7 +697,7 @@
 				CODE_SIGN_ENTITLEMENTS = "SuprSendSwiftExample-iOS/SuprSendSwiftExample-iOS.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_ASSET_PATHS = "\"SuprSendSwiftExample-iOS/Preview Content\"";
 				DEVELOPMENT_TEAM = G7DJURR5RJ;
 				ENABLE_PREVIEWS = YES;

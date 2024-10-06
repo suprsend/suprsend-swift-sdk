@@ -11,8 +11,13 @@ import UIKit
 open class SuprSendNotificationService: UNNotificationServiceExtension {
     
     open func publicKey() -> String {
-        ""
+        String()
     }
+    
+    open func options() -> SuprSend.Options? {
+        nil
+    }
+    
     var contentHandler: ((UNNotificationContent) -> Void)?
     var modifiedNotificationContent: UNMutableNotificationContent?
     
@@ -20,7 +25,7 @@ open class SuprSendNotificationService: UNNotificationServiceExtension {
         self.contentHandler = contentHandler
         modifiedNotificationContent = (request.content.mutableCopy() as? UNMutableNotificationContent)
         
-        SuprSend.shared.configure(publicKey: publicKey(), options: .init(host: "https://collector-staging.suprsend.workers.dev", enhancedSecurity: false))
+        SuprSend.shared.configure(publicKey: publicKey(), options: options())
         SuprSend.shared.push.didReceive(request, withContentHandler: contentHandler)
         
         if let modifiedNotificationContent = modifiedNotificationContent {

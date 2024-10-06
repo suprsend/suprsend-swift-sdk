@@ -11,6 +11,10 @@ import SuprSendSwift
 
 class NotificationService: SuprSendNotificationService {
     override func publicKey() -> String {
-        "SS.PUBK.oBmt2wYUtvDLJsmsyb1FsJigN0v8ezOsC83sfFjgwks"
+        SuprSendConstants.publicKey
+    }
+    
+    override func options() -> SuprSend.Options? {
+        .init(host: SuprSendConstants.host, enhancedSecurity: false)
     }
 }
