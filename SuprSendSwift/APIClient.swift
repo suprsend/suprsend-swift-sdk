@@ -113,7 +113,7 @@ class APIClient {
         {
 
             let jwtPayload = try? Utils.shared.decode(jwtToken: userToken)
-            let expiresOn = (jwtPayload?[Constants.expiryKeyJWT] as? Double ?? .zero) * 1000
+            let expiresOn = (jwtPayload?[Constants.expiryKeyJWT] as? Double ?? .zero)
             let now = Date.now.timeIntervalSince1970
             let hasExpired = expiresOn <= now
 

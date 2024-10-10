@@ -141,7 +141,7 @@ public class SuprSend: NSObject {
     ) async -> APIResponse {
 
         // other user already present
-        guard distinctID != self.distinctID else {
+        guard (self.distinctID == nil || distinctID == self.distinctID) else {
             return .error(
                 .init(
                     type: .validation,
@@ -275,9 +275,10 @@ public class SuprSend: NSObject {
     func handleRefreshUserToken(refreshUserToken: @escaping RefreshTokenCallback) {
         guard let userToken else { return }
 
-        let expiresOn = 0.0
+        let jwtPayload = try? Utils.shared.decode(jwtToken: userToken)
+        let expiresOn = (jwtPayload?[Constants.expiryKeyJWT] as? Double ?? .zero)// in ms
         let now = Date.now.timeIntervalSince1970
-        let refreshBefore = 1000.0 * 30.0  // call refresh api before 30sec of expiry
+        let refreshBefore = 30.0  // call refresh api before 30sec of expiry
 
         if expiresOn > now {
             let timeDiff = expiresOn - now - refreshBefore
@@ -286,9 +287,9 @@ public class SuprSend: NSObject {
                 userTokenExpirationTimer?.invalidate()
                 userTokenExpirationTimer = nil
             }
-
+            
             userTokenExpirationTimer = Timer.scheduledTimer(
-                withTimeInterval: timeDiff, repeats: true
+                withTimeInterval: timeDiff, repeats: false
             ) { _ in
                 self.timerCallback(refreshUserToken: refreshUserToken)
             }

@@ -6,6 +6,7 @@
 //
 
 import Foundation
+internal import Reachability
 
 class PushQueue {
     
@@ -13,16 +14,40 @@ class PushQueue {
     
     let config: SuprSend
     
+    //declare this property where it won't go out of scope relative to your listener
+    let reachability = try! Reachability()
+    
     init(config: SuprSend) {
         self.config = config
         items = UserDefaultsManager.shared.get() ?? []
         
         flush()
+        
+        setupReachability()
+    }
+    
+    deinit {
+        reachability.stopNotifier()
     }
     
     private var items: [PushQueueItem] {
         didSet {
             UserDefaultsManager.shared.set(items)
+        }
+    }
+    
+    private func setupReachability() {
+        reachability.whenReachable = { [weak self] reachability in
+            self?.flush()
+        }
+        reachability.whenUnreachable = { _ in
+            debugPrint("Not reachable")
+        }
+        
+        do {
+            try reachability.startNotifier()
+        } catch {
+            debugPrint("Unable to start notifier")
         }
     }
     

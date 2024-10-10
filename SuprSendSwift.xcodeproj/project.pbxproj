@@ -15,6 +15,7 @@
 		217DEDE02CAB3182002C9C87 /* SuprSendSwift.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 21955F0D2CA27CC500B205A1 /* SuprSendSwift.framework */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		218DB8882CA290690031B465 /* PartialSheet in Frameworks */ = {isa = PBXBuildFile; productRef = 218DB8872CA290690031B465 /* PartialSheet */; };
 		21955F182CA27CC500B205A1 /* SuprSendSwift.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 21955F0D2CA27CC500B205A1 /* SuprSendSwift.framework */; };
+		21DBAAFF2CB778F100C2D4E3 /* Reachability in Frameworks */ = {isa = PBXBuildFile; productRef = 21DBAAFE2CB778F100C2D4E3 /* Reachability */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -211,6 +212,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				21DBAAFF2CB778F100C2D4E3 /* Reachability in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -361,6 +363,7 @@
 			);
 			name = SuprSendSwift;
 			packageProductDependencies = (
+				21DBAAFE2CB778F100C2D4E3 /* Reachability */,
 			);
 			productName = SuprSendSwift;
 			productReference = 21955F0D2CA27CC500B205A1 /* SuprSendSwift.framework */;
@@ -427,6 +430,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				218DB8862CA290690031B465 /* XCRemoteSwiftPackageReference "PartialSheet" */,
+				21DBAAFD2CB778F100C2D4E3 /* XCRemoteSwiftPackageReference "Reachability" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 21955F0E2CA27CC500B205A1 /* Products */;
@@ -1037,6 +1041,14 @@
 				minimumVersion = 0.0.4;
 			};
 		};
+		21DBAAFD2CB778F100C2D4E3 /* XCRemoteSwiftPackageReference "Reachability" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ashleymills/Reachability.swift";
+			requirement = {
+				branch = master;
+				kind = branch;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1044,6 +1056,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 218DB8862CA290690031B465 /* XCRemoteSwiftPackageReference "PartialSheet" */;
 			productName = PartialSheet;
+		};
+		21DBAAFE2CB778F100C2D4E3 /* Reachability */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 21DBAAFD2CB778F100C2D4E3 /* XCRemoteSwiftPackageReference "Reachability" */;
+			productName = Reachability;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

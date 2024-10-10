@@ -74,6 +74,7 @@ public enum ErrorType: String, Codable {
     case permissionDenied = "PERMISSION_DENIED"
     case unsupportedAction = "UNSUPPORTED_ACTION"
     case tokenInvalid = "token_invalid"
+    case tokenexpired = "token_expired"
 }
 
 /// The `APIResponse` struct defines an API response.
