@@ -9,7 +9,7 @@ import Foundation
 import OSLog
 
 /// A utility class providing various helper methods.
-class Utils {
+final class Utils: Sendable {
     /// Shared instance of the `Utils` class.
     static let shared = Utils()
 

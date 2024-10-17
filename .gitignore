@@ -1,0 +1,16 @@
+.DS_Store
+/.build
+/Packages
+Package.resolved
+/*.xcodeproj
+xcuserdata/
+DerivedData/
+.swiftpm/config/registries.json
+.swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
+Example/SuprSendSwiftExample-iOS/GoogleService-Info.plist
+SuprSendConstants.swift
+/Pod-Example/Pods
+/.swiftpm
+Example/build/
+/build
+Tests/SuprSendSwiftTests/Mock/MockJWTToken.swift
