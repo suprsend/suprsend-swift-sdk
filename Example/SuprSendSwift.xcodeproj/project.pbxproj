@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		2137F0172CA2B52000D39C45 /* SuprSendSwiftExample-iOSNotificationService.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2137F0102CA2B52000D39C45 /* SuprSendSwiftExample-iOSNotificationService.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		214B615F2CC0BA2A00023DF0 /* SuprSendSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 214B615E2CC0BA2A00023DF0 /* SuprSendSwift */; };
+		214B61612CC0BAAD00023DF0 /* SuprSendSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 214B61602CC0BAAD00023DF0 /* SuprSendSwift */; };
 		218DB8882CA290690031B465 /* PartialSheet in Frameworks */ = {isa = PBXBuildFile; productRef = 218DB8872CA290690031B465 /* PartialSheet */; };
 /* End PBXBuildFile section */
 
@@ -115,6 +117,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				214B61612CC0BAAD00023DF0 /* SuprSendSwift in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -129,6 +132,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				214B615F2CC0BA2A00023DF0 /* SuprSendSwift in Frameworks */,
 				218DB8882CA290690031B465 /* PartialSheet in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -184,6 +188,7 @@
 			);
 			name = "SuprSendSwiftExample-iOSNotificationService";
 			packageProductDependencies = (
+				214B61602CC0BAAD00023DF0 /* SuprSendSwift */,
 			);
 			productName = "SuprSendSwiftExample-iOSNotificationService";
 			productReference = 2137F0102CA2B52000D39C45 /* SuprSendSwiftExample-iOSNotificationService.appex */;
@@ -233,6 +238,7 @@
 			name = "SuprSendSwiftExample-iOS";
 			packageProductDependencies = (
 				218DB8872CA290690031B465 /* PartialSheet */,
+				214B615E2CC0BA2A00023DF0 /* SuprSendSwift */,
 			);
 			productName = "SuprSendSwiftExample-iOS";
 			productReference = 218DB7E22CA28F3B0031B465 /* SuprSendSwiftExample-iOS.app */;
@@ -270,6 +276,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				218DB8862CA290690031B465 /* XCRemoteSwiftPackageReference "PartialSheet" */,
+				214B615D2CC0BA2A00023DF0 /* XCRemoteSwiftPackageReference "suprsend-swift-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 21955F0E2CA27CC500B205A1 /* Products */;
@@ -683,6 +690,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		214B615D2CC0BA2A00023DF0 /* XCRemoteSwiftPackageReference "suprsend-swift-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/suprsend/suprsend-swift-sdk";
+			requirement = {
+				branch = "feature/notification-events-queue";
+				kind = branch;
+			};
+		};
 		218DB8862CA290690031B465 /* XCRemoteSwiftPackageReference "PartialSheet" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/AndreaMiotto/PartialSheet.git";
@@ -694,6 +709,16 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		214B615E2CC0BA2A00023DF0 /* SuprSendSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 214B615D2CC0BA2A00023DF0 /* XCRemoteSwiftPackageReference "suprsend-swift-sdk" */;
+			productName = SuprSendSwift;
+		};
+		214B61602CC0BAAD00023DF0 /* SuprSendSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 214B615D2CC0BA2A00023DF0 /* XCRemoteSwiftPackageReference "suprsend-swift-sdk" */;
+			productName = SuprSendSwift;
+		};
 		218DB8872CA290690031B465 /* PartialSheet */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 218DB8862CA290690031B465 /* XCRemoteSwiftPackageReference "PartialSheet" */;
