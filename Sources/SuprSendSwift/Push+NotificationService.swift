@@ -5,6 +5,7 @@
 //  Created by Ram Suthar on 24/09/24.
 //
 
+#if os(iOS) || os(watchOS) || os(tvOS)
 import UserNotifications
 import UIKit
 
@@ -127,3 +128,4 @@ extension SuprSendNotificationService {
     }
     
 }
+#endif

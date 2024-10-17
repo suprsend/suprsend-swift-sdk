@@ -7,7 +7,9 @@
 
 import Foundation
 import UserNotifications
+#if os(iOS) || os(watchOS) || os(tvOS)
 import UIKit
+#endif
 
 /// A class responsible for handling push notifications.
 public class Push {
@@ -32,7 +34,9 @@ public class Push {
             return token
         }
         if await notificationPermission() == .authorized {
+#if os(iOS) || os(watchOS) || os(tvOS)
             await UIApplication.shared.registerForRemoteNotifications()
+#endif
             return nil
         }
         return nil
@@ -135,11 +139,13 @@ extension Push {
         }
     }
     
+#if os(iOS) || os(watchOS) || os(tvOS)
     public func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable : Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
         Task {
             await trackNotificationDelivered(userInfo: userInfo)
         }
     }
+#endif
     
     public func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         Task {
