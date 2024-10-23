@@ -73,7 +73,7 @@ public class Preferences {
         debouncedUpdateCategoryPreferences
             .throttle(for: 0.5, scheduler: DispatchQueue.main, latest: true)
             .sink { [weak self] params in
-                Task {
+                Task { [weak self] in
                     await self?._updateCategoryPreferences(
                         category: params.category,
                         body: params.body,
@@ -87,7 +87,7 @@ public class Preferences {
         debouncedUpdateChannelPreferences
             .throttle(for: 0.5, scheduler: DispatchQueue.main, latest: true)
             .sink { [weak self] body in
-                Task {
+                Task { [weak self] in
                     await self?._updateChannelPreferences(body: body)
                 }
             }

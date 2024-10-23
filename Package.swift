@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 5.6
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
@@ -19,7 +19,7 @@ let package = Package(
     dependencies: [
         .package(
             url: "https://github.com/ashleymills/Reachability.swift",
-            exact: "5.2.4"
+            from: "5.2.4"
         )
     ],
     targets: [
@@ -29,13 +29,11 @@ let package = Package(
             name: "SuprSendSwift",
             dependencies: [
                 .product(name: "Reachability", package: "reachability.swift"),
-            ],
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            ]
         ),
         .testTarget(
             name: "SuprSendSwiftTests",
-            dependencies: ["SuprSendSwift"],
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            dependencies: ["SuprSendSwift"]
         ),
     ]
 )

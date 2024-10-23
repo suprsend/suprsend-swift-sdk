@@ -6,7 +6,7 @@
 //
 
 import Foundation
-internal import Reachability
+import Reachability
 
 class PushQueue {
     
