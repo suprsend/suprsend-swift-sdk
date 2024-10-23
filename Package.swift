@@ -19,7 +19,7 @@ let package = Package(
     dependencies: [
         .package(
             url: "https://github.com/ashleymills/Reachability.swift",
-            branch: "master"
+            exact: "5.2.4"
         )
     ],
     targets: [
@@ -30,13 +30,11 @@ let package = Package(
             dependencies: [
                 .product(name: "Reachability", package: "reachability.swift"),
             ],
-            exclude: ["Example", "Docs"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .testTarget(
             name: "SuprSendSwiftTests",
             dependencies: ["SuprSendSwift"],
-            exclude: ["Example", "Docs"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
     ]
