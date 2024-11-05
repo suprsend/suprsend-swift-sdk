@@ -6,7 +6,7 @@
 //
 
 #import "AppDelegate.h"
-#import <SuprSendSwift/SuprSendSwift.h>
+#import <SuprSend/SuprSend.h>
 
 @interface AppDelegate ()
 

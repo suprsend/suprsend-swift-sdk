@@ -1,13 +1,13 @@
 //
 //  NotificationService.swift
-//  SuprSendSwiftExample-iOSNotificationService
+//  SuprSendExample-iOSNotificationService
 //
 //  Created by Ram Suthar on 24/09/24.
 //
 
 import UserNotifications
 import UIKit
-import SuprSendSwift
+import SuprSend
 
 class NotificationService: SuprSendNotificationService {
     override func publicKey() -> String {

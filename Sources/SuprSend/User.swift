@@ -1,6 +1,6 @@
 //
 //  User.swift
-//  SuprSendSwift
+//  SuprSend
 //
 //  Created by Ram Suthar on 25/08/24.
 //
@@ -252,7 +252,7 @@ extension User {
     ///
     /// - Parameter token: The push notification token to add for this user.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
-    public func addPush(_ token: String) async -> APIResponse {
+    public func addiOSPush(_ token: String) async -> APIResponse {
         let event = event(
             type: .append,
             properties: [
@@ -271,7 +271,7 @@ extension User {
     ///
     /// - Parameter token: The push notification token to remove for this user.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
-    public func removePush(_ token: String) async -> APIResponse {
+    public func removeiOSPush(_ token: String) async -> APIResponse {
         let event = event(
             type: .remove,
             properties: [

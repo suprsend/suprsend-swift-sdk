@@ -1,6 +1,6 @@
 //
 //  PreferenceOptions.swift
-//  SuprSendSwift
+//  SuprSend
 //
 //  Created by Ram Suthar on 16/09/24.
 //

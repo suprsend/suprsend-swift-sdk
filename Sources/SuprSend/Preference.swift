@@ -1,6 +1,6 @@
 //
 //  Preference.swift
-//  SuprSendSwift
+//  SuprSend
 //
 //  Created by Ram Suthar on 05/09/24.
 //
@@ -365,14 +365,14 @@ public class Preferences {
                 continue
             }
 
-            for var subcategory in subcategories {
+            for subcategory in subcategories {
                 if subcategory.category == category {
                     categoryData = subcategory
                     guard let channels = subcategory.channels else {
                         continue
                     }
 
-                    for var channelData in channels {
+                    for channelData in channels {
                         if channelData.channel == channel {
                             selectedChannelData = channelData
                             if channelData.isEditable {

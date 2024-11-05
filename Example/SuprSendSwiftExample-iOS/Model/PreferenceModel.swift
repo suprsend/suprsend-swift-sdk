@@ -1,12 +1,12 @@
 //
 //  PreferenceModel.swift
-//  SuprSendSwiftExample-iOS
+//  SuprSendExample-iOS
 //
 //  Created by Ram Suthar on 01/10/24.
 //
 
 import Foundation
-import SuprSendSwift
+import SuprSend
 import Combine
 
 class PreferenceViewModel: ObservableObject {
@@ -17,8 +17,8 @@ class PreferenceViewModel: ObservableObject {
             channels = preferenceData?.channelPreferences ?? []
         }
     }
-    @Published var categories: [SuprSendSwift.Category] = []
-    @Published var channels: [SuprSendSwift.ChannelPreference] = []
+    @Published var categories: [SuprSend.Category] = []
+    @Published var channels: [SuprSend.ChannelPreference] = []
     
     init() {
         isLoading = true

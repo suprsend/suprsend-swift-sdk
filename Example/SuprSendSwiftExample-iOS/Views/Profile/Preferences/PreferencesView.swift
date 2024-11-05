@@ -1,12 +1,12 @@
 //
 //  PreferencesView.swift
-//  SuprSendSwiftExample-iOS
+//  SuprSendExample-iOS
 //
 //  Created by Ram Suthar on 01/10/24.
 //
 
 import SwiftUI
-import SuprSendSwift
+import SuprSend
 
 struct PreferencesView: View {
     
@@ -57,9 +57,9 @@ struct PreferencesView: View {
 struct CategoryView: View {
     
     @State var isOn: Bool
-    var category: SuprSendSwift.Category
+    var category: SuprSend.Category
     
-    init(category: SuprSendSwift.Category) {
+    init(category: SuprSend.Category) {
         isOn = category.preference == .optIn
         self.category = category
     }

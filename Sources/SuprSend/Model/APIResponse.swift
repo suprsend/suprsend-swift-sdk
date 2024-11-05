@@ -1,6 +1,6 @@
 //
 //  APIResponse.swift
-//  SuprSendSwift
+//  SuprSend
 //
 //  Created by Ram Suthar on 24/08/24.
 //

@@ -1,6 +1,6 @@
 //
 //  Push.swift
-//  SuprSendSwift
+//  SuprSend
 //
 //  Created by Ram Suthar on 30/08/24.
 //
@@ -48,7 +48,7 @@ public class Push {
     public func updatePushSubscription() async {
         let subscription = await getPushSubscription()
         if let subscription {
-            _ = await self.config.user.addPush(subscription)
+            _ = await self.config.user.addiOSPush(subscription)
         }
     }
 
@@ -58,7 +58,7 @@ public class Push {
     public func removePushSubscription() async {
         let subscription = await getPushSubscription()
         if let subscription {
-            _ = await self.config.user.removePush(subscription)
+            _ = await self.config.user.removeiOSPush(subscription)
         }
     }
 

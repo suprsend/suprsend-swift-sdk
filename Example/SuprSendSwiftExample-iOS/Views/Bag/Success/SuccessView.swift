@@ -7,7 +7,7 @@
 //
 
 import SwiftUI
-import SuprSendSwift
+import SuprSend
 
 struct SuccessView: View {
     

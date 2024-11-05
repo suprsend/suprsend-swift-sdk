@@ -8,7 +8,7 @@
 
 import UIKit
 import SwiftUI
-import SuprSendSwift
+import SuprSend
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     

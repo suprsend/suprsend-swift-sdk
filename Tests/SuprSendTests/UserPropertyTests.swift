@@ -1,13 +1,13 @@
 //
 //  UserPropertyTests.swift
-//  SuprSendSwiftTests
+//  SuprSendTests
 //
 //  Created by Ram Suthar on 16/09/24.
 //
 
 import Testing
 import OSLog
-@testable import SuprSendSwift
+@testable import SuprSend
 
 struct UserPropertyTests {
 

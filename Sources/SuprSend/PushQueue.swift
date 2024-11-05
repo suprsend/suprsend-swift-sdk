@@ -1,6 +1,6 @@
 //
 //  PushQueue.swift
-//  SuprSendSwift
+//  SuprSend
 //
 //  Created by Ram Suthar on 03/10/24.
 //

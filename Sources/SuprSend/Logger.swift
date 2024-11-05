@@ -1,6 +1,6 @@
 //
 //  Logger.swift
-//  SuprSendSwift
+//  SuprSend
 //
 //  Created by Ram Suthar on 15/09/24.
 //

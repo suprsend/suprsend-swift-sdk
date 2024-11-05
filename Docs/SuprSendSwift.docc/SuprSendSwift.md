@@ -1,4 +1,4 @@
-# ``SuprSendSwift``
+# ``SuprSend``
 
 SuprSend Swift Client
 

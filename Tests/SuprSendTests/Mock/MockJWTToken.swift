@@ -1,6 +1,6 @@
 //
 //  MockJWTToken.swift
-//  SuprSendSwiftTests
+//  SuprSendTests
 //
 //  Created by Ram Suthar on 16/09/24.
 //

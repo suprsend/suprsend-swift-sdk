@@ -1,6 +1,6 @@
 //
 //  Utils.swift
-//  SuprSendSwift
+//  SuprSend
 //
 //  Created by Ram Suthar on 22/08/24.
 //

@@ -7,7 +7,7 @@
 //
 
 import UIKit
-import SuprSendSwift
+import SuprSend
 import UserNotifications
 
 @UIApplicationMain

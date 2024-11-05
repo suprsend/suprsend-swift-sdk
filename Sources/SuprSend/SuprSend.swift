@@ -1,6 +1,6 @@
 //
 //  SuprSend.swift
-//  SuprSendSwift
+//  SuprSend
 //
 //  Created by Ram Suthar on 24/08/24.
 //
@@ -23,21 +23,17 @@ public class SuprSend: NSObject {
     /// Additional configurations
     /// - Parameters:
     ///   - host: Host URL
-    ///   - vapidKey: VAPID key
     public class Options: NSObject {
         /// Host URL
         public let host: String?
-        public let enhancedSecurity: Bool
         
-        public init(host: String?, enhancedSecurity: Bool) {
+        public init(host: String?) {
             self.host = host
-            self.enhancedSecurity = enhancedSecurity
         }
     }
 
     var host: String
     var publicKey: String
-    private(set) var enhancedSecurity: Bool
     private(set) var distinctID: String?
     var deviceToken: String?
     private(set) var userToken: String?
@@ -68,14 +64,12 @@ public class SuprSend: NSObject {
     ) {
         self.publicKey = publicKey
         self.host = options?.host ?? Constants.defaultHost
-        self.enhancedSecurity = options?.enhancedSecurity ?? false
     }
 
     @objc public func configure(publicKey: String,
                           options: Options? = nil) {
         self.publicKey = publicKey
         self.host = options?.host ?? Constants.defaultHost
-        self.enhancedSecurity = options?.enhancedSecurity ?? false
     }
     
     @objc public func setDeepLinkDelegate(_ urlDelegate: SuprSendDeepLinkDelegate) {
@@ -136,8 +130,8 @@ public class SuprSend: NSObject {
     /// - Returns: Respnose from the API call
     public func identify(
         distinctID: String,
-        userToken: String?,
-        options: AuthenticateOptions?
+        userToken: String? = nil,
+        options: AuthenticateOptions? = nil
     ) async -> APIResponse {
 
         // other user already present
@@ -228,7 +222,7 @@ public class SuprSend: NSObject {
     public func track(event: String, properties: EventProperty? = nil) async -> APIResponse {
         guard isIdentified(checkUserToken: true) else {
             return .error(
-                .init(type: .validation, message: "Identify User First")
+                .init(type: .validation, message: "User isn't authenticated. Call identify method before performing any action")
             )
         }
 

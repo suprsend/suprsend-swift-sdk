@@ -1,22 +1,22 @@
 //
-//  SuprSendSwiftTests.swift
-//  SuprSendSwiftTests
+//  SuprSendTests.swift
+//  SuprSendTests
 //
 //  Created by Ram Suthar on 24/09/24.
 //
 
 import Testing
-@testable import SuprSendSwift
+import Foundation
+@testable import SuprSend
 
-struct SuprSendSwiftTests {
+struct SuprSendTests {
     
     @Test func testEvents() async throws {
         let token: String = try MockJWTToken().generate(for: "hello@example.com")
         
         SuprSend.shared.configure(
-            publicKey: "SS.PUBK.oBmt2wYUtvDLJsmsyb1FsJigN0v8ezOsC83sfFjgwks",
-            options: .init(host: "https://collector-staging.suprsend.workers.dev",
-                           enhancedSecurity: false)
+            publicKey: "<YOUR_PUBLIC_KEY>",
+            options: .init(host: "https://collector-staging.suprsend.workers.dev")
         )
         
         let client =  SuprSend.shared

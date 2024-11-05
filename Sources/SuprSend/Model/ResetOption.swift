@@ -1,6 +1,6 @@
 //
 //  ResetOption.swift
-//  SuprSendSwift
+//  SuprSend
 //
 //  Created by Ram Suthar on 25/08/24.
 //

@@ -1,6 +1,6 @@
 //
 //  Push+NotificationService.swift
-//  SuprSendSwift
+//  SuprSend
 //
 //  Created by Ram Suthar on 24/09/24.
 //
