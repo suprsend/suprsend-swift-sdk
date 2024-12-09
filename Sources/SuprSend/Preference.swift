@@ -9,13 +9,11 @@ import Combine
 import Foundation
 
 /// A class representing preferences.
-///
 /// This class provides methods for getting and updating user's preferences data.
 public class Preferences {
+    
     /// A struct representing arguments for getting preferences.
-    ///
     /// The `tenantId` parameter is used to specify the tenant ID when making API requests. If not provided, it defaults to `nil`.
-    ///
     /// The `showOptOutChannels` parameter controls whether to show opt-out channels in the response. It defaults to `true`.
     public struct Args {
         /// The tenant ID to use when making API requests. Defaults to `nil`.
@@ -95,7 +93,6 @@ public class Preferences {
     }
 
     /// Returns a URL for making API requests.
-    ///
     /// - Parameters:
     ///   - path: The path to append to the base URL. Defaults to `nil`.
     ///   - qp: Query parameters to include in the request. Defaults to an empty dictionary.
@@ -117,7 +114,6 @@ public class Preferences {
     }
 
     /// Used to get user's whole preferences data.
-    ///
     /// - Parameters:
     ///   - args: Arguments for the request. Defaults to `nil`.
     public func getPreferences(args: Args? = nil) async -> PreferenceAPIResponse {
@@ -146,7 +142,6 @@ public class Preferences {
     }
 
     /// Used to get categories.
-    ///
     /// - Parameters:
     ///   - args: Arguments for the request. Defaults to `nil`.
     public func getCategories(args: CategoryArgs? = nil) async -> APIResponse {
@@ -164,7 +159,6 @@ public class Preferences {
     }
 
     /// Used to get a category.
-    ///
     /// - Parameters:
     ///   - category: The ID of the category to retrieve. Defaults to `nil`.
     ///   - args: Arguments for the request. Defaults to an empty dictionary.
@@ -238,7 +232,6 @@ public class Preferences {
     }
 
     /// Used to update user's category level preference.
-    ///
     /// - Parameters:
     ///   - category: The ID of the category to update. Defaults to `nil`.
     ///   - preference: The new preference value. Defaults to `nil`.
@@ -331,7 +324,6 @@ public class Preferences {
     }
 
     /// Used to update a channel preference in a category.
-    ///
     /// - Parameters:
     ///   - channel: The ID of the channel to update. Defaults to `nil`.
     ///   - preference: The new preference value. Defaults to `nil`.
@@ -446,7 +438,6 @@ public class Preferences {
     }
 
     /// Used to update overall channel preferences.
-    ///
     /// - Parameters:
     ///   - channel: The ID of the channel to update. Defaults to `nil`.
     ///   - preference: The new preference value. Defaults to `nil`.

@@ -28,7 +28,6 @@ public class Emitter {
     }
 
     /// Registers a callback to be executed when the specified event occurs.
-    ///
     /// - Parameters:
     ///   - event: The event for which to register the callback.
     ///   - callback: The callback function to execute when the event occurs.
@@ -42,7 +41,6 @@ public class Emitter {
     }
 
     /// Emits a specified event with associated data.
-    ///
     /// - Parameters:
     ///   - event: The event to emit.
     ///   - data: The data associated with the emitted event.

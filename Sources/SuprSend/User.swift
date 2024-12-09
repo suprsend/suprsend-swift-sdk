@@ -19,7 +19,6 @@ public class User {
     }
 
     /// Initializes a new instance of `User` with the given configuration.
-    ///
     /// - Parameter config: The configuration to use for this user.
     init(config: SuprSend) {
         self.config = config
@@ -27,10 +26,8 @@ public class User {
     }
 
     /// Triggers an event on the user's behalf, sending a request to the API.
-    ///
     /// This method is used internally by other methods in this class. It takes
     /// an `EventProperties` object and sends it to the API using the provided configuration.
-    ///
     /// - Parameter eventProperties: The properties of the event to trigger.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
     private func triggerUserEvent(_ eventProperties: UserProperty.EventProperties) async
@@ -47,7 +44,6 @@ public class User {
     }
 
     /// Retrieves the device ID associated with this user.
-    ///
     /// If a device ID has been previously stored, it is returned. Otherwise, a new device ID is generated and stored for future use.
     private func getDeviceID() -> String {
         let deviceID = Utils.shared.getLocalStorageData(key: Constants.deviceIDKey)
@@ -62,7 +58,6 @@ public class User {
     }
 
     /// Creates an event with the given type and properties.
-    ///
     /// - Parameter type: The type of event to create.
     /// - Parameter properties: The properties of the event.
     /// - Returns: An array containing a single key-value pair, where the key is the event type and the value is the event properties.
@@ -73,7 +68,6 @@ public class User {
     }
 
     /// Creates an event with the given type and array of string properties.
-    ///
     /// - Parameter type: The type of event to create.
     /// - Parameter properties: An array of strings representing the event properties.
     /// - Returns: An array containing a single key-value pair, where the key is the event type and the value is the event properties.
@@ -84,7 +78,6 @@ public class User {
     }
 
     /// Creates an event with the given type and channel properties.
-    ///
     /// - Parameter type: The type of event to create.
     /// - Parameter properties: A dictionary representing the channel properties.
     /// - Returns: An array containing a single key-value pair, where the key is the event type and the value is the event properties.
@@ -99,9 +92,7 @@ public class User {
 extension User {
 
     /// Sets a single user property with the given key and value.
-    ///
     /// This method takes an `Encodable` object as the value to set, and returns a promise that resolves with a response from the API, or rejects with an error if one occurs.
-    ///
     /// - Parameter key: The key of the property to set.
     /// - Parameter value: The value to set for the property.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
@@ -110,9 +101,7 @@ extension User {
     }
 
     /// Sets multiple user properties at once.
-    ///
     /// This method takes an `EventProperty` object as the properties to set, and returns a promise that resolves with a response from the API, or rejects with an error if one occurs.
-    ///
     /// - Parameter properties: The properties to set for this user.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
     public func set(properties: EventProperty) async -> APIResponse {
@@ -121,9 +110,7 @@ extension User {
     }
 
     /// Sets a single user property with the given key and value, only once.
-    ///
     /// This method takes an `Encodable` object as the value to set, and returns a promise that resolves with a response from the API, or rejects with an error if one occurs.
-    ///
     /// - Parameter key: The key of the property to set.
     /// - Parameter value: The value to set for the property.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
@@ -132,9 +119,7 @@ extension User {
     }
 
     /// Sets multiple user properties at once, only once.
-    ///
     /// This method takes an `EventProperty` object as the properties to set, and returns a promise that resolves with a response from the API, or rejects with an error if one occurs.
-    ///
     /// - Parameter properties: The properties to set for this user.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
     public func setOnce(properties: EventProperty) async -> APIResponse {
@@ -143,9 +128,7 @@ extension User {
     }
 
     /// Increments a single user property by the given amount.
-    ///
     /// This method takes an `Int` value to increment by, and returns a promise that resolves with a response from the API, or rejects with an error if one occurs.
-    ///
     /// - Parameter key: The key of the property to increment.
     /// - Parameter value: The amount to increment the property by.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
@@ -154,9 +137,7 @@ extension User {
     }
 
     /// Increments multiple user properties at once.
-    ///
     /// This method takes an array of key-value pairs representing the properties to increment, and returns a promise that resolves with a response from the API, or rejects with an error if one occurs.
-    ///
     /// - Parameter properties: An array of key-value pairs representing the properties to increment.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
     public func increment(properties: [String: Float]) async -> APIResponse {
@@ -165,9 +146,7 @@ extension User {
     }
 
     /// Appends a single user property to its current value.
-    ///
     /// This method takes an `Encodable` object as the value to append, and returns a promise that resolves with a response from the API, or rejects with an error if one occurs.
-    ///
     /// - Parameter key: The key of the property to append to.
     /// - Parameter value: The value to append to the property.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
@@ -176,9 +155,7 @@ extension User {
     }
 
     /// Appends multiple user properties at once.
-    ///
     /// This method takes an `EventProperty` object as the properties to append, and returns a promise that resolves with a response from the API, or rejects with an error if one occurs.
-    ///
     /// - Parameter properties: The properties to append for this user.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
     public func append(properties: EventProperty) async -> APIResponse {
@@ -187,9 +164,7 @@ extension User {
     }
 
     /// Removes a single user property by its key.
-    ///
     /// This method takes a `String` value as the key of the property to remove, and returns a promise that resolves with a response from the API, or rejects with an error if one occurs.
-    ///
     /// - Parameter key: The key of the property to remove.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
     public func remove(key: String, value: Encodable) async -> APIResponse {
@@ -197,9 +172,7 @@ extension User {
     }
 
     /// Removes multiple user properties at once.
-    ///
     /// This method takes an `EventProperty` object as the properties to remove, and returns a promise that resolves with a response from the API, or rejects with an error if one occurs.
-    ///
     /// - Parameter properties: The properties to remove for this user.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
     public func remove(properties: EventProperty) async -> APIResponse {
@@ -208,9 +181,7 @@ extension User {
     }
 
     /// Unsets multiple user properties at once.
-    ///
     /// This method takes an array of `String` values representing the keys to unset, and returns a promise that resolves with a response from the API, or rejects with an error if one occurs.
-    ///
     /// - Parameter keys: An array of keys to unset for this user.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
     public func unset(key: String) async -> APIResponse {
@@ -218,9 +189,7 @@ extension User {
     }
 
     /// Unsets multiple user properties at once.
-    ///
     /// This method takes an array of `String` values representing the keys to unset, and returns a promise that resolves with a response from the API, or rejects with an error if one occurs.
-    ///
     /// - Parameter keys: An array of keys to unset for this user.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
     public func unset(keys: [String]) async -> APIResponse {
@@ -235,9 +204,7 @@ typealias ChannelProperty = [ChannelType: Encodable]
 extension ChannelProperty {
 
     /// Converts this channel property to a `Property` object.
-    ///
     /// This method takes no parameters and returns a promise that resolves with a `Property` object representing the converted channel property.
-    ///
     /// - Returns: A promise that resolves with a `Property` object representing the converted channel property, or rejects with an error if one occurs.
     func convertToProperty() -> Property {
         .init(compactMapValues { AnyEncodable($0) })
@@ -247,9 +214,7 @@ extension ChannelProperty {
 extension User {
 
     /// Adds a push notification token for this user.
-    ///
     /// This method takes a `String` value representing the push notification token, and returns a promise that resolves with a response from the API, or rejects with an error if one occurs.
-    ///
     /// - Parameter token: The push notification token to add for this user.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
     public func addiOSPush(_ token: String) async -> APIResponse {
@@ -266,9 +231,7 @@ extension User {
     }
 
     /// Removes a push notification token for this user.
-    ///
     /// This method takes a `String` value representing the push notification token, and returns a promise that resolves with a response from the API, or rejects with an error if one occurs.
-    ///
     /// - Parameter token: The push notification token to remove for this user.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
     public func removeiOSPush(_ token: String) async -> APIResponse {
@@ -284,9 +247,7 @@ extension User {
     }
 
     /// Adds an email address for this user.
-    ///
     /// This method takes a `String` value representing the email address, and returns a promise that resolves with a response from the API, or rejects with an error if one occurs.
-    ///
     /// - Parameter email: The email address to add for this user.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
     public func addEmail(_ email: String) async -> APIResponse {
@@ -300,9 +261,7 @@ extension User {
     }
 
     /// Removes an email address for this user.
-    ///
     /// This method takes a `String` value representing the email address, and returns a promise that resolves with a response from the API, or rejects with an error if one occurs.
-    ///
     /// - Parameter email: The email address to remove for this user.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
     public func removeEmail(_ email: String) async -> APIResponse {
@@ -316,9 +275,7 @@ extension User {
     }
 
     /// Adds an SMS number for this user.
-    ///
     /// This method takes a `String` value representing the SMS number, and returns a promise that resolves with a response from the API, or rejects with an error if one occurs.
-    ///
     /// - Parameter mobile: The SMS number to add for this user.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
     public func addSMS(_ mobile: String) async -> APIResponse {
@@ -334,9 +291,7 @@ extension User {
     }
 
     /// Removes an SMS number for this user.
-    ///
     /// This method takes a `String` value representing the SMS number, and returns a promise that resolves with a response from the API, or rejects with an error if one occurs.
-    ///
     /// - Parameter mobile: The SMS number to remove for this user.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
     public func removeSMS(_ mobile: String) async -> APIResponse {
@@ -352,9 +307,7 @@ extension User {
     }
 
     /// Adds a WhatsApp number for this user.
-    ///
     /// This method takes a `String` value representing the WhatsApp number, and returns a promise that resolves with a response from the API, or rejects with an error if one occurs.
-    ///
     /// - Parameter mobile: The WhatsApp number to add for this user.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
     public func addWhatsapp(_ mobile: String) async -> APIResponse {
@@ -370,9 +323,7 @@ extension User {
     }
 
     /// Removes a WhatsApp number for this user.
-    ///
     /// This method takes a `String` value representing the WhatsApp number, and returns a promise that resolves with a response from the API, or rejects with an error if one occurs.
-    ///
     /// - Parameter mobile: The WhatsApp number to remove for this user.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
     public func removeWhatsapp(_ mobile: String) async -> APIResponse {
@@ -388,9 +339,7 @@ extension User {
     }
 
     /// Adds Slack data for this user.
-    ///
     /// This method takes an `Encodable` object representing the Slack data, and returns a promise that resolves with a response from the API, or rejects with an error if one occurs.
-    ///
     /// - Parameter data: The Slack data to add for this user.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
     public func addSlack(_ data: Encodable) async -> APIResponse {
@@ -399,9 +348,7 @@ extension User {
     }
 
     /// Removes Slack data for this user.
-    ///
     /// This method takes an `Encodable` object representing the Slack data, and returns a promise that resolves with a response from the API, or rejects with an error if one occurs.
-    ///
     /// - Parameter data: The Slack data to remove for this user.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
     public func removeSlack(_ data: Encodable) async -> APIResponse {
@@ -410,9 +357,7 @@ extension User {
     }
 
     /// Adds Microsoft Teams data for this user.
-    ///
     /// This method takes an `Encodable` object representing the Microsoft Teams data, and returns a promise that resolves with a response from the API, or rejects with an error if one occurs.
-    ///
     /// - Parameter data: The Microsoft Teams data to add for this user.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
     public func addMSTeams(_ data: Encodable) async -> APIResponse {
@@ -422,9 +367,7 @@ extension User {
     }
 
     /// Removes Microsoft Teams data for this user.
-    ///
     /// This method takes an `Encodable` object representing the Microsoft Teams data, and returns a promise that resolves with a response from the API, or rejects with an error if one occurs.
-    ///
     /// - Parameter data: The Microsoft Teams data to remove for this user.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
     public func removeMSTeams(_ data: Encodable) async -> APIResponse {
@@ -433,9 +376,7 @@ extension User {
     }
 
     /// Sets the preferred language for this user.
-    ///
     /// This method takes a `String` value representing the preferred language, and returns a promise that resolves with a response from the API, or rejects with an error if one occurs.
-    ///
     /// - Parameter language: The preferred language to set for this user.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
     public func setPreferredLanguage(_ language: String) async -> APIResponse {
@@ -444,9 +385,7 @@ extension User {
     }
 
     /// Sets the timezone for this user.
-    ///
     /// This method takes a `String` value representing the timezone, and returns a promise that resolves with a response from the API, or rejects with an error if one occurs.
-    ///
     /// - Parameter timezone: The timezone to set for this user.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
     public func setTimezone(_ timezone: String) async -> APIResponse {

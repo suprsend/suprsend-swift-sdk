@@ -14,7 +14,6 @@ final class Utils: Sendable {
     static let shared = Utils()
 
     /// Retrieves a string value from the local storage using the specified key.
-    ///
     /// - Parameter key: The key to retrieve the value for.
     /// - Returns: The retrieved string value, or nil if not found.
     func getLocalStorageData(key: String) -> String? {
@@ -22,7 +21,6 @@ final class Utils: Sendable {
     }
 
     /// Sets a string value in the local storage using the specified key.
-    ///
     /// - Parameter key: The key to store the value under.
     /// - Parameter value: The string value to store.
     func setLocalStorageData(key: String, value: String) {
@@ -31,7 +29,6 @@ final class Utils: Sendable {
     }
 
     /// Removes a stored value from the local storage using the specified key.
-    ///
     /// - Parameter key: The key to remove the value for.
     func removeLocalStorageData(key: String) {
         UserDefaults.standard.removeObject(forKey: key)
@@ -39,7 +36,6 @@ final class Utils: Sendable {
     }
 
     /// Decodes a JWT token into a dictionary of string-to-any values.
-    ///
     /// - Parameter jwt: The JWT token to decode.
     /// - Returns: A dictionary containing the decoded payload, or throws an error if decoding fails.
     func decode(jwtToken jwt: String) throws -> [String: Any] {
@@ -50,7 +46,6 @@ final class Utils: Sendable {
         }
 
         /// Decodes a base64-encoded string into Data.
-        ///
         /// - Parameter base64: The base64-encoded string to decode.
         /// - Returns: The decoded Data, or throws an error if decoding fails.
         func base64Decode(_ base64: String) throws -> Data {
@@ -67,7 +62,6 @@ final class Utils: Sendable {
         }
 
         /// Decodes a JWT part into a dictionary of string-to-any values.
-        ///
         /// - Parameter value: The JWT part to decode.
         /// - Returns: A dictionary containing the decoded payload, or throws an error if decoding fails.
         func decodeJWTPart(_ value: String) throws -> [String: Any] {
@@ -87,7 +81,6 @@ final class Utils: Sendable {
     }
 
     /// Validates an `EventProperty` dictionary, removing reserved keys if allowed.
-    ///
     /// - Parameter data: The `EventProperty` dictionary to validate.
     /// - Parameter options: Optional validation options (default is nil).
     /// - Returns: A validated `EventProperty` dictionary with reserved keys removed if allowed.
@@ -110,7 +103,6 @@ final class Utils: Sendable {
     }
 
     /// Validates an array of strings, removing reserved keys if allowed.
-    ///
     /// - Parameter data: The array of strings to validate.
     /// - Returns: A validated array of strings with reserved keys removed if allowed.
     func validateArrayData(data: [String]) -> [String] {
@@ -128,7 +120,6 @@ final class Utils: Sendable {
     }
 
     /// Checks whether a given string key is reserved.
-    ///
     /// - Parameter key: The string key to check.
     /// - Returns: True if the key is reserved, false otherwise.
     func isReservedKey(_ key: String) -> Bool {
@@ -136,7 +127,6 @@ final class Utils: Sendable {
     }
 
     /// Validates an email address against a regular expression pattern.
-    ///
     /// - Parameter email: The email address to validate.
     /// - Returns: True if the email is valid, false otherwise.
     func validateEmail(email: String) -> Bool {
@@ -144,7 +134,6 @@ final class Utils: Sendable {
     }
 
     /// Validates a phone number against a regular expression pattern.
-    ///
     /// - Parameter phone: The phone number to validate.
     /// - Returns: True if the phone number is valid, false otherwise.
     func validatePhone(phone: String) -> Bool {

@@ -11,14 +11,12 @@ class APIClient {
     private let config: SuprSend
 
     /// Initializes the API client with a configuration.
-    ///
     /// - Parameter config: The configuration to use for the API client.
     init(config: SuprSend) {
         self.config = config
     }
 
     /// Gets the full URL with the given path.
-    ///
     /// - Parameter path: The path to append to the base URL.
     /// - Returns: The full URL, or nil if the base URL is invalid.
     private func getUrl(path: String) -> URL? {
@@ -26,7 +24,6 @@ class APIClient {
     }
 
     /// Gets the headers for API requests.
-    ///
     /// - Returns: A dictionary of headers to include in API requests.
     private func getHeaders() -> [String: String] {
         var headers = [
@@ -42,7 +39,6 @@ class APIClient {
     }
 
     /// Makes an API request using the given data.
-    ///
     /// - Parameter reqData: The data to use for the API request.
     /// - Returns: A response object representing the result of the API request.
     private func requestApiInstance<R: Response>(reqData: HandleRequest) async throws -> R {
@@ -57,7 +53,6 @@ class APIClient {
     }
 
     /// Makes a GET API request using the given path.
-    ///
     /// - Parameter path: The path to use for the GET request.
     /// - Returns: A response object representing the result of the GET request.
     private func get<R: Response>(path: String) async throws -> R {
@@ -69,7 +64,6 @@ class APIClient {
     }
 
     /// Makes a POST API request using the given path and payload.
-    ///
     /// - Parameter path: The path to use for the POST request.
     /// - Parameter payload: The data to include in the POST request body.
     /// - Returns: A response object representing the result of the POST request.
@@ -82,7 +76,6 @@ class APIClient {
     }
 
     /// Makes a PATCH API request using the given path and payload.
-    ///
     /// - Parameter path: The path to use for the PATCH request.
     /// - Parameter payload: The data to include in the PATCH request body.
     /// - Returns: A response object representing the result of the PATCH request.
@@ -95,7 +88,6 @@ class APIClient {
     }
 
     /// Makes an API request using the given data.
-    ///
     /// - Parameter reqData: The data to use for the API request.
     /// - Returns: A response object representing the result of the API request.
     func request<R: Response>(reqData: HandleRequest) async -> R {
@@ -159,7 +151,6 @@ class APIClient {
     }
 
     /// Fetches data from the given URL using the specified method and headers.
-    ///
     /// - Parameters:
     ///   - url: The URL to fetch data from.
     ///   - method: The HTTP method to use for the request.
