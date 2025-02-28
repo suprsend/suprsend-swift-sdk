@@ -38,7 +38,7 @@ public class Preferences {
         public let offset: Int?
     }
 
-    private let config: SuprSend
+    private let config: SuprSendClient
     private var preferenceData: PreferenceData?
     private var preferenceArgs: Args?
 
@@ -65,7 +65,7 @@ public class Preferences {
         }
     }
 
-    init(config: SuprSend) {
+    init(config: SuprSendClient) {
         self.config = config
 
         debouncedUpdateCategoryPreferences

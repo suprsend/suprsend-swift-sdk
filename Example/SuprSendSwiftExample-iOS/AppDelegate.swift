@@ -17,7 +17,8 @@ class AppDelegate: UIResponder {
         
         SuprSend.shared.configure(
             publicKey: SuprSendConstants.publicKey,
-            options: SuprSend.Options(host: SuprSendConstants.host, enhancedSecurity: false)
+            options: SuprSend.Options(host: SuprSendConstants.host),
+            urlDelegate: self
         )
         
         SuprSend.shared.enableLogging()
@@ -56,7 +57,7 @@ extension AppDelegate: UIApplicationDelegate {
         print("Device Token: \(token)")
         
         Task {
-            await SuprSend.shared.user.addPush(token)
+            await SuprSend.shared.user.addiOSPush(token)
         }
     }
     

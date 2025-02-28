@@ -14,13 +14,13 @@ import UIKit
 /// A class responsible for handling push notifications.
 public class Push {
     /// The configuration instance used to manage user data.
-    private let config: SuprSend
+    private let config: SuprSendClient
     
     private let queue: PushQueue
 
     /// Initializes a new `Push` instance with the given configuration.
     /// - Parameter config: The configuration instance to use.
-    init(config: SuprSend) {
+    init(config: SuprSendClient) {
         self.config = config
         self.queue = PushQueue(config: config)
     }
@@ -122,6 +122,18 @@ extension Push {
 
 // MARK: - AppDelegate Functions Mapping
 extension Push {
+    private func handleGlobalActionURL(response: UNNotificationResponse) {
+        let actionURL = response.notification.request.content.userInfo["global_action_url"] as? String
+        if let actionURL,
+            let url = URL(string: actionURL) {
+            if config.urlDelegate?.shouldHandleSuprSendDeepLink(url) == true {
+                DispatchQueue.main.async {
+                    UIApplication.shared.open(url)
+                }
+            }
+        }
+    }
+    
     public func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         Task {
             if response.actionIdentifier == UNNotificationDismissActionIdentifier {
@@ -129,6 +141,8 @@ extension Push {
             } else {
                 await trackNotificationClicked(userInfo: response.notification.request.content.userInfo)
             }
+            
+            handleGlobalActionURL(response: response)
         }
     }
     

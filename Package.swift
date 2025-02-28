@@ -16,20 +16,11 @@ let package = Package(
             targets: ["SuprSend"]
         )
     ],
-    dependencies: [
-        .package(
-            url: "https://github.com/ashleymills/Reachability.swift",
-            from: "5.2.4"
-        )
-    ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         // Targets can depend on other targets in this package and products from dependencies.
         .target(
-            name: "SuprSend",
-            dependencies: [
-                .product(name: "Reachability", package: "reachability.swift"),
-            ]
+            name: "SuprSend"
         ),
         .testTarget(
             name: "SuprSendTests",

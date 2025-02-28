@@ -15,22 +15,25 @@ import Foundation
     func pushNotificationTapped(withCustomExtras customExtras: [AnyHashable : Any]!)
 }
 
-/// SuprSend iOS Client
-public class SuprSend: NSObject {
-    
-    @objc(sharedInstance) public static let shared = SuprSend(publicKey: "")
+public let shared = SuprSendClient.shared
 
-    /// Additional configurations
-    /// - Parameters:
-    ///   - host: Host URL
-    public class Options: NSObject {
-        /// Host URL
-        public let host: String?
-        
-        public init(host: String?) {
-            self.host = host
-        }
+/// Additional configurations
+/// - Parameters:
+///   - host: Host URL
+public class Options: NSObject {
+    /// Host URL
+    public let host: String?
+    
+    public init(host: String?) {
+        self.host = host
     }
+}
+
+/// Additional configurations
+/// SuprSend iOS Client
+public class SuprSendClient: NSObject {
+    
+    @objc(sharedInstance) public static let shared = SuprSendClient(publicKey: "")
 
     var host: String
     var publicKey: String
@@ -52,7 +55,7 @@ public class SuprSend: NSObject {
     public let emitter = Emitter()
     private var userTokenExpirationTimer: Timer?
     
-    private var urlDelegate: SuprSendDeepLinkDelegate?
+    private(set) var urlDelegate: SuprSendDeepLinkDelegate?
 
     /// Create SuprSend instance
     /// - Parameters:
@@ -67,9 +70,11 @@ public class SuprSend: NSObject {
     }
 
     @objc public func configure(publicKey: String,
-                          options: Options? = nil) {
+                                options: Options? = nil,
+                                urlDelegate: SuprSendDeepLinkDelegate? = nil) {
         self.publicKey = publicKey
         self.host = options?.host ?? Constants.defaultHost
+        self.urlDelegate = urlDelegate
     }
     
     @objc public func setDeepLinkDelegate(_ urlDelegate: SuprSendDeepLinkDelegate) {
@@ -361,10 +366,10 @@ public class SuprSend: NSObject {
     }
 }
 
-extension SuprSend {
+extension SuprSendClient {
     /// Get the SDK version.
     private var sdkVersion: String {
-        (Bundle(for: SuprSend.self).infoDictionary as? [String: String])?[
+        (Bundle(for: SuprSendClient.self).infoDictionary as? [String: String])?[
             "CFBundleShortVersionString"] ?? "2.0.0"
     }
 

@@ -16,8 +16,6 @@ Pod::Spec.new do |spec|
   spec.source       = { :git => "https://github.com/suprsend/suprsend-swift-sdk.git", :tag => "#{spec.version}" }
   spec.source_files = "Sources/SuprSend/**/*.swift"
   
-  spec.dependency "ReachabilitySwift", "~> 5.2.4"
-  
   spec.requires_arc = true
   spec.swift_version = '5.0'
 

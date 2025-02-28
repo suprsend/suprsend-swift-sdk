@@ -8,11 +8,11 @@
 import Foundation
 
 class APIClient {
-    private let config: SuprSend
+    private let config: SuprSendClient
 
     /// Initializes the API client with a configuration.
     /// - Parameter config: The configuration to use for the API client.
-    init(config: SuprSend) {
+    init(config: SuprSendClient) {
         self.config = config
     }
 

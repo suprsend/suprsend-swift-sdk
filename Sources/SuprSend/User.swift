@@ -12,7 +12,7 @@ public class User {
     /// The user's preferences.
     public let preferences: Preferences
 
-    private let config: SuprSend
+    private let config: SuprSendClient
 
     private var distinctID: String {
         config.distinctID ?? .init()
@@ -20,7 +20,7 @@ public class User {
 
     /// Initializes a new instance of `User` with the given configuration.
     /// - Parameter config: The configuration to use for this user.
-    init(config: SuprSend) {
+    init(config: SuprSendClient) {
         self.config = config
         self.preferences = Preferences(config: config)
     }

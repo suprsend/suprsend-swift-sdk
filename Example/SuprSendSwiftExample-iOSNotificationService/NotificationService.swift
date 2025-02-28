@@ -15,6 +15,6 @@ class NotificationService: SuprSendNotificationService {
     }
     
     override func options() -> SuprSend.Options? {
-        .init(host: SuprSendConstants.host, enhancedSecurity: false)
+        .init(host: SuprSendConstants.host)
     }
 }

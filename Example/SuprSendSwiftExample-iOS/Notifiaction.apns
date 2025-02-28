@@ -15,5 +15,6 @@
         "badge" : 1
     },
     "image_url": "https://logospng.org/download/apple/logo-apple-256.png",
+    "global_action_url": "suprsend-ecommerce://product/123",
     "Simulator Target Bundle": "suprsend.ecommerce"
 }

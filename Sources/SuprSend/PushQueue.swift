@@ -6,18 +6,17 @@
 //
 
 import Foundation
-import Reachability
 
 class PushQueue {
     
     private let userDefaultsKey: String = "PushQueueItems"
     
-    let config: SuprSend
+    let config: SuprSendClient
     
     //declare this property where it won't go out of scope relative to your listener
     let reachability = try! Reachability()
     
-    init(config: SuprSend) {
+    init(config: SuprSendClient) {
         self.config = config
         items = UserDefaultsManager.shared.get() ?? []
         
