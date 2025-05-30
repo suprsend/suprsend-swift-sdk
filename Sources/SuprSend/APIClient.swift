@@ -103,19 +103,19 @@ class APIClient {
         if let refreshUserToken = config.authenticateOptions?.refreshUserToken,
             let userToken = config.userToken
         {
-
+            
             let jwtPayload = try? Utils.shared.decode(jwtToken: userToken)
             let expiresOn = (jwtPayload?[Constants.expiryKeyJWT] as? Double ?? .zero)
             let now = Date.now.timeIntervalSince1970
             let hasExpired = expiresOn <= now
-
+            
             if hasExpired {
                 do {
                     let newUserToken = try await refreshUserToken(
                         userToken,
                         jwtPayload ?? .init()
                     )
-
+                    
                     if let newUserToken {
                         _ = await config.identify(
                             distinctID: distinctID,
@@ -127,17 +127,15 @@ class APIClient {
                     // error while getting token go ahead with calling api
                 }
             }
-
-            do {
-                return try await requestApiInstance(reqData: reqData)
-            } catch {
-                logger.error("Error while calling API: \(error)")
-                return .error(
-                    .init(type: .network, message: error.localizedDescription), statusCode: 500)
-            }
         }
 
-        return .error(.init(type: .validation, message: "User token is missing"))
+        do {
+            return try await requestApiInstance(reqData: reqData)
+        } catch {
+            logger.error("Error while calling API: \(error)")
+            return .error(
+                .init(type: .network, message: error.localizedDescription), statusCode: 500)
+        }
     }
     
     func publicRequest<R: Response>(reqData: HandleRequest) async -> R {
