@@ -225,12 +225,6 @@ public class SuprSendClient: NSObject {
     ///   - properties: Properties for the event
     /// - Returns: Response from the API call
     public func track(event: String, properties: EventProperty? = nil) async -> APIResponse {
-        guard isIdentified(checkUserToken: true) else {
-            return .error(
-                .init(type: .validation, message: "User isn't authenticated. Call identify method before performing any action")
-            )
-        }
-
         let validatedProperties: EventProperty
         if let properties {
             validatedProperties = Utils.shared.validateObjData(data: properties)
