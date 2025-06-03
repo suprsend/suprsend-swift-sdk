@@ -21,6 +21,15 @@ public class Preferences {
 
         /// Whether to show opt-out channels in the response. Defaults to `true`.
         public let showOptOutChannels: Bool
+        
+        /// Arguments for getting preferences.
+        /// - Parameters:
+        ///   - tenantId: The `tenantId` parameter is used to specify the tenant ID when making API requests. If not provided, it defaults to `nil`.
+        ///   - showOptOutChannels: The `showOptOutChannels` parameter controls whether to show opt-out channels in the response. It defaults to `true`.
+        public init(tenantId: String? = nil, showOptOutChannels: Bool = true) {
+            self.tenantId = tenantId
+            self.showOptOutChannels = showOptOutChannels
+        }
     }
 
     /// A struct representing arguments for getting categories.
@@ -36,6 +45,24 @@ public class Preferences {
 
         /// The offset at which to start returning categories. Defaults to `nil`.
         public let offset: Int?
+        
+        /// Arguments for getting categories.
+        /// - Parameters:
+        ///   - tenantId: The tenant ID to use when making API requests. Defaults to `nil`.
+        ///   - showOptOutChannels: Whether to show opt-out channels in the response. Defaults to `true`.
+        ///   - limit: The maximum number of categories to return. Defaults to `nil`.
+        ///   - offset: The offset at which to start returning categories. Defaults to `nil`.
+        public init(
+            tenantId: String? = nil,
+            showOptOutChannels: Bool = true,
+            limit: Int? = nil,
+            offset: Int? = nil
+        ) {
+            self.tenantId = tenantId
+            self.showOptOutChannels = showOptOutChannels
+            self.limit = limit
+            self.offset = offset
+        }
     }
 
     private let config: SuprSendClient
@@ -69,7 +96,7 @@ public class Preferences {
         self.config = config
 
         debouncedUpdateCategoryPreferences
-            .throttle(for: 0.5, scheduler: DispatchQueue.main, latest: true)
+            .debounce(for: .seconds(0.5), scheduler: RunLoop.main)
             .sink { [weak self] params in
                 Task { [weak self] in
                     await self?._updateCategoryPreferences(
@@ -83,7 +110,7 @@ public class Preferences {
             .store(in: &cancellables)
 
         debouncedUpdateChannelPreferences
-            .throttle(for: 0.5, scheduler: DispatchQueue.main, latest: true)
+            .debounce(for: .seconds(0.5), scheduler: RunLoop.main)
             .sink { [weak self] body in
                 Task { [weak self] in
                     await self?._updateChannelPreferences(body: body)

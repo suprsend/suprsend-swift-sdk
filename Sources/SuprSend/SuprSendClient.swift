@@ -56,6 +56,11 @@ public class SuprSendClient: NSObject {
     private var userTokenExpirationTimer: Timer?
     
     private(set) var urlDelegate: SuprSendDeepLinkDelegate?
+    
+    /// Check if the user is identified.
+    public var isIdentified: Bool {
+        distinctID != nil
+    }
 
     /// Create SuprSend instance
     /// - Parameters:
