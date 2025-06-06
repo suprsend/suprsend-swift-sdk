@@ -141,15 +141,12 @@ public struct PreferenceAPIResponse: Response {
     }
     
     public init(from decoder: any Decoder) throws {
-//        let container = try decoder.container(keyedBy: CodingKeys.self)
-//        self.status = try container.decode(ResponseStatus.self, forKey: .status)
-//        self.statusCode = try container.decodeIfPresent(StatusCode.self, forKey: .statusCode)
-        self.body = try PreferenceData(from: decoder)
-//        self.error = try container.decodeIfPresent(ResponseError.self, forKey: .error)
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.status = try container.decodeIfPresent(ResponseStatus.self, forKey: .status) ?? .success
+        self.statusCode = try container.decodeIfPresent(StatusCode.self, forKey: .statusCode)
+        self.error = try container.decodeIfPresent(ResponseError.self, forKey: .error)
         
-        self.status = .success
-        self.statusCode = nil
-        self.error = nil
+        self.body = try PreferenceData(from: decoder)
     }
 }
 

@@ -73,8 +73,20 @@ public enum ErrorType: String, Codable {
     case network = "NETWORK_ERROR"
     case permissionDenied = "PERMISSION_DENIED"
     case unsupportedAction = "UNSUPPORTED_ACTION"
-    case tokenInvalid = "token_invalid"
-    case tokenexpired = "token_expired"
+    case tokenInvalid = "TOKEN_INVALID"
+    case tokenexpired = "TOKEN_EXPIRED"
+    case notFound = "NOT_FOUND"
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawString = try container.decode(String.self)
+        
+        if let userType = ErrorType(rawValue: rawString.uppercased()) {
+            self = userType
+        } else {
+            self = .unknown
+        }
+    }
 }
 
 /// The `APIResponse` struct defines an API response.

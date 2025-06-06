@@ -20,7 +20,11 @@ class APIClient {
     /// - Parameter path: The path to append to the base URL.
     /// - Returns: The full URL, or nil if the base URL is invalid.
     private func getUrl(path: String) -> URL? {
-        return URL(string: config.host)?.appendingPathComponent(path)
+        if config.host.hasSuffix("/") {
+            URL(string: config.host + path)
+        } else {
+            URL(string: config.host + "/" + path)
+        }
     }
 
     /// Gets the headers for API requests.
@@ -169,23 +173,28 @@ class APIClient {
         }
 
         let (data, response) = try await URLSession.shared.data(for: request)
-
-        //        let json = try JSONSerialization.jsonObject(with: data, options: [])
-        //        return .success(statusCode: httpResponse?.statusCode, body: json as? R.Body)
-
-        let result = try JSONDecoder().decode(R.self, from: data)
-        if let httpResponse = response as? HTTPURLResponse {
-            if data.isEmpty {
-                logger.error("SuprSend: \(httpResponse.statusCode) \(result.status.rawValue)")
-            } else {
-                logger.info(
-                    "SuprSend: \(httpResponse.statusCode) \(String(data: data, encoding: .utf8)!)")
+        
+        let httpResponse = response as? HTTPURLResponse
+        
+        do {
+            let result = try JSONDecoder().decode(R.self, from: data)
+            if let httpResponse {
+                if data.isEmpty {
+                    logger.error("SuprSend: \(httpResponse.statusCode) \(result.status.rawValue)")
+                } else {
+                    logger.info(
+                        "SuprSend: \(httpResponse.statusCode) \(String(data: data, encoding: .utf8)!)")
+                }
             }
+            if let message = result.error?.message {
+                logger.error("\(message)")
+            }
+            
+            return result
+        } catch {
+            logger.error("SuprSend: \(httpResponse?.statusCode ?? 0) \(String(data: data, encoding: .utf8) ?? "")")
         }
-        if let message = result.error?.message {
-            logger.error("\(message)")
-        }
-
-        return result
+        
+        return .error(.init(type: .unknown, message: nil), statusCode: httpResponse?.statusCode)
     }
 }

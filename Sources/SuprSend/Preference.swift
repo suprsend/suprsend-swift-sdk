@@ -124,7 +124,7 @@ public class Preferences {
     ///   - path: The path to append to the base URL. Defaults to `nil`.
     ///   - qp: Query parameters to include in the request. Defaults to an empty dictionary.
     func getUrlpath(path: String, qp: [String: Any?]? = nil) -> URL {
-        let urlPath = "v2/subscriber/\(config.distinctID?.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String())/\(path)"
+        let urlPath = "v2/subscriber/\(config.distinctID?.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String())/\(path)/"
         let queryParams = qp?.compactMap({ item in
             if let value = item.value {
                 URLQueryItem(name: item.key, value: String(describing: value))
@@ -135,7 +135,7 @@ public class Preferences {
 
         var urlComponents = URLComponents(string: urlPath)!
         if let queryParams {
-//            urlComponents.queryItems = queryParams
+            urlComponents.queryItems = queryParams
         }
         return urlComponents.url!
     }
@@ -147,7 +147,7 @@ public class Preferences {
 
         let queryParams: [String: Any?] = [
             "tenant_id": args?.tenantId,
-            "show_opt_out_channels": "\(args?.showOptOutChannels ?? true)",
+            "show_opt_out_channels": args?.showOptOutChannels ?? true,
         ]
         preferenceArgs = args
 
