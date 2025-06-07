@@ -24,8 +24,8 @@ struct PreferencesView: View {
                     Text("loading...")
                 } else {
                     if selectedTab == "Category" {
-                        List($viewModel.categories, id: \.category) { category in
-                            CategoryView(category: category.wrappedValue)
+                        List($viewModel.categories, id: \.category) { $category in
+                            CategoryView(category: category)
                         }
                     } else {
                         List($viewModel.channels, id: \.channel) { item in
@@ -56,13 +56,8 @@ struct PreferencesView: View {
 
 struct CategoryView: View {
     
-    @State var isOn: Bool
+    @State var isOn: Bool = false
     var category: SuprSend.Category
-    
-    init(category: SuprSend.Category) {
-        isOn = category.preference == .optIn
-        self.category = category
-    }
     
     var body: some View {
         Section(header: Toggle(category.name, isOn: $isOn)
@@ -75,10 +70,13 @@ struct CategoryView: View {
                 .disabled(!category.isEditable)
         ) {
             ForEach(category.channels ?? [], id: \.channel) { item in
-                ToggleView(channel: item, category: category.category)
+                ToggleView(category: category.category, channel: item)
             }
         }
         .headerProminence(.increased)
+        .onAppear() {
+            isOn = category.preference == .optIn
+        }
     }
 }
 
@@ -108,13 +106,7 @@ struct RadioView: View {
 struct ToggleView: View {
     let category: String
     let channel: CategoryChannel
-    @State var isOn: Bool
-    
-    init(channel: CategoryChannel, category: String) {
-        self.channel = channel
-        self.category = category
-        self.isOn = channel.preference == .optIn
-    }
+    @State var isOn: Bool = false
     
     var body: some View {
         Toggle(channel.channel, isOn: $isOn)
@@ -132,5 +124,13 @@ struct ToggleView: View {
                 }
             })
             .disabled(!channel.isEditable)
+            .onAppear() {
+                self.isOn = channel.preference == .optIn
+            }
+            .onChange(
+                of: channel.preference,
+                perform: { value in
+                    self.isOn = value == .optIn
+                })
     }
 }
