@@ -157,6 +157,9 @@ extension Push {
     public func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         Task {
             await trackNotificationDelivered(userInfo: notification.request.content.userInfo)
+            
+            // Notification is presented while app is in active use and seen by user.
+            await trackNotificationClicked(userInfo: notification.request.content.userInfo)
         }
     }
 }
