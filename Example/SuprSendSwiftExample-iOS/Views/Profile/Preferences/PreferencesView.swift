@@ -77,6 +77,11 @@ struct CategoryView: View {
         .onAppear() {
             isOn = category.preference == .optIn
         }
+        .onChange(
+            of: category.preference,
+            perform: { value in
+                isOn = value == .optIn
+            })
     }
 }
 
