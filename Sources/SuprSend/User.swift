@@ -33,7 +33,6 @@ public class User {
     private func triggerUserEvent(_ eventProperties: UserProperty.EventProperties) async
         -> APIResponse
     {
-        // TODO: Add validation error for empty properties
         let event = UserProperty(
             insertID: UUID().uuidString,
             time: Date().timeIntervalSince1970,
@@ -361,7 +360,6 @@ extension User {
     /// - Parameter data: The Microsoft Teams data to add for this user.
     /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
     public func addMSTeams(_ data: Encodable) async -> APIResponse {
-        // TODO: sanitize data
         let event = event(type: .append, properties: [.msTeams: data])
         return await triggerUserEvent(event)
     }

@@ -6,7 +6,6 @@
 //
 
 import Testing
-import OSLog
 @testable import SuprSend
 
 struct UserPropertyTests {

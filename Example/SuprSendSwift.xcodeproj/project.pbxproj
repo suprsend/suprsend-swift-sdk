@@ -276,7 +276,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				218DB8862CA290690031B465 /* XCRemoteSwiftPackageReference "PartialSheet" */,
-				214A6C842CC8B49D005BA125 /* XCLocalSwiftPackageReference "../../SuprSendSwift" */,
+				21E5CB862DEB2E39002E548C /* XCLocalSwiftPackageReference "../../SuprSendSwift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 21955F0E2CA27CC500B205A1 /* Products */;
@@ -690,7 +690,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		214A6C842CC8B49D005BA125 /* XCLocalSwiftPackageReference "../../SuprSendSwift" */ = {
+		21E5CB862DEB2E39002E548C /* XCLocalSwiftPackageReference "../../SuprSendSwift" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../../SuprSendSwift;
 		};
@@ -708,20 +708,20 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		2133B9E62DEF2B2D00774432 /* SuprSend */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 21E5CB862DEB2E39002E548C /* XCLocalSwiftPackageReference "../../SuprSendSwift" */;
+			productName = SuprSend;
+		};
+		2133B9E82DEF2B7F00774432 /* SuprSend */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 21E5CB862DEB2E39002E548C /* XCLocalSwiftPackageReference "../../SuprSendSwift" */;
+			productName = SuprSend;
+		};
 		218DB8872CA290690031B465 /* PartialSheet */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 218DB8862CA290690031B465 /* XCRemoteSwiftPackageReference "PartialSheet" */;
 			productName = PartialSheet;
-		};
-		21FD949E2D71D72500CA82D7 /* SuprSend */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 214A6C842CC8B49D005BA125 /* XCLocalSwiftPackageReference "../../SuprSendSwift" */;
-			productName = SuprSend;
-		};
-		21FD94A02D71D76A00CA82D7 /* SuprSend */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 214A6C842CC8B49D005BA125 /* XCLocalSwiftPackageReference "../../SuprSendSwift" */;
-			productName = SuprSend;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

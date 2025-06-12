@@ -40,13 +40,13 @@ class PushQueue {
             self?.flush()
         }
         reachability.whenUnreachable = { _ in
-            debugPrint("Not reachable")
+            logger.error("Not reachable")
         }
         
         do {
             try reachability.startNotifier()
         } catch {
-            debugPrint("Unable to start notifier")
+            logger.error("Unable to start notifier")
         }
     }
     

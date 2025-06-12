@@ -31,7 +31,7 @@ struct CommonAnalyticsHandler {
     }
     
     static func getToken(for identity: String) async -> String? {
-        let url = "https://collector-staging.suprsend.workers.dev/authentication-token/\(identity)/"
+        let url = "<YOUR_TOKEN_URL>/\(identity)/"
         let response: (data: Data, response: URLResponse)? = try? await URLSession.shared.data(from: URL(string: url)!)
         if let data = response?.data {
             let tokenResponse = try? JSONDecoder().decode(TokenResponse.self, from: data)

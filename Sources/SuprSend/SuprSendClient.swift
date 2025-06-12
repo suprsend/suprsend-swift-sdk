@@ -85,7 +85,7 @@ public class SuprSendClient: NSObject {
     /// - Returns: The APIClient instance, or nil if not yet initialized.
     func client() -> APIClient {
         if distinctID == nil {
-            logger.warn("[SuprSend]: distinctId is missing. User should be authenticated")
+            logger.warning("[SuprSend]: distinctId is missing. User should be authenticated")
         }
 
         if let apiClient {
@@ -348,15 +348,16 @@ public class SuprSendClient: NSObject {
 
         Utils.shared.removeLocalStorageData(key: Constants.authenticatedDistinctID)
 
-        if unsubscribePush {
-            // TODO: Expire timer for reset token
+        if userTokenExpirationTimer != nil {
+            userTokenExpirationTimer?.invalidate()
+            userTokenExpirationTimer = nil
         }
 
         return .success()
     }
 
     @objc public func enableLogging() {
-        // TODO: Add Logging
+        logger.enableLogging()
     }
 }
 

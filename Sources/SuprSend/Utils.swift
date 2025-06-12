@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import OSLog
 
 /// A utility class providing various helper methods.
 final class Utils: Sendable {

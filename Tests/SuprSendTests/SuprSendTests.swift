@@ -16,7 +16,7 @@ struct SuprSendTests {
         
         SuprSend.shared.configure(
             publicKey: "<YOUR_PUBLIC_KEY>",
-            options: .init(host: "https://collector-staging.suprsend.workers.dev")
+            options: .init(host: "<CUSTOM_HOST_URL>")
         )
         
         let client =  SuprSend.shared

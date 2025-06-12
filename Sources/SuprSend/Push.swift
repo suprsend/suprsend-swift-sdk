@@ -68,14 +68,13 @@ public class Push {
     /// - Note: This method currently returns a placeholder response and should be implemented to retrieve the actual device token.
     /// - Returns: A placeholder API response indicating success.
     func registerPush() async throws -> APIResponse {
-        // TODO: Get push notification device token
         let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [
             .alert, .sound, .badge,
         ])
         if granted {
-            print("Notification permission granted.")
+            logger.info("Notification permission granted.")
         } else {
-            print("Notification permission denied.")
+            logger.warning("Notification permission denied.")
         }
         return .success()
     }
