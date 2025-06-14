@@ -15,7 +15,7 @@ open class SuprSendNotificationService: UNNotificationServiceExtension {
         String()
     }
     
-    open func options() -> SuprSend.Options? {
+    open func options() -> Options? {
         nil
     }
     
@@ -26,8 +26,9 @@ open class SuprSendNotificationService: UNNotificationServiceExtension {
         self.contentHandler = contentHandler
         modifiedNotificationContent = (request.content.mutableCopy() as? UNMutableNotificationContent)
         
-        SuprSend.shared.configure(publicKey: publicKey(), options: options())
-        SuprSend.shared.push.didReceive(request, withContentHandler: contentHandler)
+        SuprSendClient.shared
+            .configure(publicKey: publicKey(), options: options())
+        SuprSendClient.shared.push.didReceive(request, withContentHandler: contentHandler)
         
         if let modifiedNotificationContent = modifiedNotificationContent {
             // Modify the notification content here...
