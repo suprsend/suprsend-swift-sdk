@@ -9,8 +9,10 @@
 /* Begin PBXBuildFile section */
 		2137F0172CA2B52000D39C45 /* SuprSendSwiftExample-iOSNotificationService.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2137F0102CA2B52000D39C45 /* SuprSendSwiftExample-iOSNotificationService.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		218DB8882CA290690031B465 /* PartialSheet in Frameworks */ = {isa = PBXBuildFile; productRef = 218DB8872CA290690031B465 /* PartialSheet */; };
-		21FD949F2D71D72500CA82D7 /* SuprSend in Frameworks */ = {isa = PBXBuildFile; productRef = 21FD949E2D71D72500CA82D7 /* SuprSend */; };
-		21FD94A12D71D76A00CA82D7 /* SuprSend in Frameworks */ = {isa = PBXBuildFile; productRef = 21FD94A02D71D76A00CA82D7 /* SuprSend */; };
+		21B3CBE12E114DCB007B33D2 /* SuprSend in Frameworks */ = {isa = PBXBuildFile; productRef = 21B3CBE02E114DCB007B33D2 /* SuprSend */; };
+		21B3CBE32E114DF2007B33D2 /* SuprSend in Frameworks */ = {isa = PBXBuildFile; productRef = 21B3CBE22E114DF2007B33D2 /* SuprSend */; };
+		21FD949F2D71D72500CA82D7 /* (null) in Frameworks */ = {isa = PBXBuildFile; };
+		21FD94A12D71D76A00CA82D7 /* (null) in Frameworks */ = {isa = PBXBuildFile; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -117,7 +119,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				21FD949F2D71D72500CA82D7 /* SuprSend in Frameworks */,
+				21B3CBE12E114DCB007B33D2 /* SuprSend in Frameworks */,
+				21FD949F2D71D72500CA82D7 /* (null) in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -132,7 +135,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				21FD94A12D71D76A00CA82D7 /* SuprSend in Frameworks */,
+				21B3CBE32E114DF2007B33D2 /* SuprSend in Frameworks */,
+				21FD94A12D71D76A00CA82D7 /* (null) in Frameworks */,
 				218DB8882CA290690031B465 /* PartialSheet in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -188,7 +192,7 @@
 			);
 			name = "SuprSendSwiftExample-iOSNotificationService";
 			packageProductDependencies = (
-				21FD949E2D71D72500CA82D7 /* SuprSend */,
+				21B3CBE02E114DCB007B33D2 /* SuprSend */,
 			);
 			productName = "SuprSendSwiftExample-iOSNotificationService";
 			productReference = 2137F0102CA2B52000D39C45 /* SuprSendSwiftExample-iOSNotificationService.appex */;
@@ -238,7 +242,7 @@
 			name = "SuprSendSwiftExample-iOS";
 			packageProductDependencies = (
 				218DB8872CA290690031B465 /* PartialSheet */,
-				21FD94A02D71D76A00CA82D7 /* SuprSend */,
+				21B3CBE22E114DF2007B33D2 /* SuprSend */,
 			);
 			productName = "SuprSendSwiftExample-iOS";
 			productReference = 218DB7E22CA28F3B0031B465 /* SuprSendSwiftExample-iOS.app */;
@@ -475,6 +479,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "SuprSendSwiftExample-iOS/Info.plist";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -508,6 +513,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "SuprSendSwiftExample-iOS/Info.plist";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -708,20 +714,18 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		2133B9E62DEF2B2D00774432 /* SuprSend */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 21E5CB862DEB2E39002E548C /* XCLocalSwiftPackageReference "../../SuprSendSwift" */;
-			productName = SuprSend;
-		};
-		2133B9E82DEF2B7F00774432 /* SuprSend */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 21E5CB862DEB2E39002E548C /* XCLocalSwiftPackageReference "../../SuprSendSwift" */;
-			productName = SuprSend;
-		};
 		218DB8872CA290690031B465 /* PartialSheet */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 218DB8862CA290690031B465 /* XCRemoteSwiftPackageReference "PartialSheet" */;
 			productName = PartialSheet;
+		};
+		21B3CBE02E114DCB007B33D2 /* SuprSend */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SuprSend;
+		};
+		21B3CBE22E114DF2007B33D2 /* SuprSend */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SuprSend;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
