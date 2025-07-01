@@ -9,16 +9,36 @@ import Foundation
 import SuprSend
 import Combine
 
+struct PreferenceSection {
+    let name: String?
+    let description: String?
+    
+    let subcategories: [SuprSend.Category]?
+    let channels: [SuprSend.ChannelPreference]?
+}
+
 class PreferenceViewModel: ObservableObject {
     @Published var isLoading: Bool
     private var preferenceData: PreferenceData? {
         didSet {
-            categories = preferenceData?.sections?.first?.subcategories ?? []
-            channels = preferenceData?.channelPreferences ?? []
+            sections = (preferenceData?.sections?.map({ section in
+                PreferenceSection(
+                    name: section.name,
+                    description: section.description,
+                    subcategories: section.subcategories,
+                    channels: nil
+                )
+            }) ?? []) + (preferenceData?.channelPreferences.map({ channels in
+                [PreferenceSection(
+                    name: "What notifications to allow for channel?",
+                    description: nil,
+                    subcategories: nil,
+                    channels: channels
+                )]
+            }) ?? [])
         }
     }
-    @Published var categories: [SuprSend.Category] = []
-    @Published var channels: [SuprSend.ChannelPreference] = []
+    @Published var sections: [PreferenceSection] = []
     
     init() {
         isLoading = true
