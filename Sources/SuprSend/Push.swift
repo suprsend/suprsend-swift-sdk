@@ -131,7 +131,8 @@ extension Push {
         let actionURL = response.notification.request.content.userInfo["global_action_url"] as? String
         if let actionURL,
             let url = URL(string: actionURL) {
-            if config.urlDelegate?.shouldHandleSuprSendDeepLink(url) == true {
+            let handleLink = config.urlDelegate?.shouldHandleSuprSendDeepLink(url) ?? true
+            if handleLink {
                 DispatchQueue.main.async {
                     UIApplication.shared.open(url)
                 }
