@@ -11,12 +11,18 @@ import UserNotifications
 import UIKit
 #endif
 
+@objc public protocol SuprSendPushNotificationDelegate: AnyObject {
+    func pushNotificationTapped(withCustomExtras customExtras: [AnyHashable : Any]!)
+}
+
 /// A class responsible for handling push notifications.
 public class Push {
     /// The configuration instance used to manage user data.
     private let config: SuprSendClient
     
     private let queue: PushQueue
+    
+    var delegate: SuprSendPushNotificationDelegate?
 
     /// Initializes a new `Push` instance with the given configuration.
     /// - Parameter config: The configuration instance to use.
@@ -142,6 +148,8 @@ extension Push {
             }
             
             handleGlobalActionURL(response: response)
+            
+            delegate?.pushNotificationTapped(withCustomExtras: response.notification.request.content.userInfo)
         }
     }
     

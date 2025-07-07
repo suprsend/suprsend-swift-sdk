@@ -11,10 +11,6 @@ import Foundation
     func shouldHandleSuprSendDeepLink(_ url: URL) -> Bool
 }
 
-@objc public protocol SuprSendPushNotificationDelegate: AnyObject {
-    func pushNotificationTapped(withCustomExtras customExtras: [AnyHashable : Any]!)
-}
-
 public let shared = SuprSendClient.shared
 
 /// Additional configurations
@@ -75,6 +71,7 @@ public class SuprSendClient: NSObject {
         self.publicKey = publicKey
         self.host = options?.host ?? Constants.defaultHost
         self.urlDelegate = urlDelegate
+        self.push.delegate = urlDelegate as? SuprSendPushNotificationDelegate
     }
     
     @objc public func setDeepLinkDelegate(_ urlDelegate: SuprSendDeepLinkDelegate) {
