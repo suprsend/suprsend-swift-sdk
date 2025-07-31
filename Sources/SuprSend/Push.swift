@@ -8,7 +8,7 @@
 import Foundation
 import UserNotifications
 #if os(iOS) || os(watchOS) || os(tvOS)
-import UIKit
+import UIKit.UIApplication
 #endif
 
 @objc public protocol SuprSendPushNotificationDelegate: AnyObject {
@@ -67,7 +67,11 @@ public class Push {
     /// Retrieves the current notification permission status.
     /// - Returns: The current notification permission status.
     public func notificationPermission() async -> UNAuthorizationStatus {
-        await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        if UIApplication.shared.delegate != nil {
+            await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        } else {
+            UNAuthorizationStatus.notDetermined
+        }
     }
 
     /// Registers for push notifications.

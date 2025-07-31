@@ -21,16 +21,16 @@ struct HomeView: View {
     fileprivate func NavigationBarView() -> some View {
         return HStack {
             Spacer()
-            //            NavigationLink(destination: BagView(show: self.$show), isActive: self.$show) {
-            Button(action: {
-                self.show.toggle()
-                print("Tapped on notification")
-            }) {
-                Image(systemName: "bell")
+            NavigationLink(destination: InboxView(), isActive: self.$show) {
+                Button(action: {
+                    self.show.toggle()
+                    print("Tapped on notification")
+                }) {
+                    Image(systemName: "bell")
+                }
+                .frame(height: 30)
+                .foregroundColor(Constants.AppColor.secondaryBlack)
             }
-            .frame(height: 30)
-            .foregroundColor(Constants.AppColor.secondaryBlack)
-            //            }
         }
         .padding(.horizontal, 15)
         .frame(width: UIScreen.main.bounds.width, height: 35)
