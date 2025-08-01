@@ -16,17 +16,23 @@ struct HomeView: View {
     @State private var selection: Int? = nil
     @State var show = false
     
-    
+    @StateObject var viewModel = InboxViewModel()
     
     fileprivate func NavigationBarView() -> some View {
         return HStack {
             Spacer()
-            NavigationLink(destination: InboxView(), isActive: self.$show) {
+            NavigationLink(destination: InboxView(viewModel: viewModel), isActive: self.$show) {
                 Button(action: {
                     self.show.toggle()
                     print("Tapped on notification")
                 }) {
-                    Image(systemName: "bell")
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: "bell")
+                            .resizable()
+                            .frame(width: 24, height: 24)
+                        BadgeView(count: viewModel.count)
+                            .frame(width: 16, height: 16)
+                    }
                 }
                 .frame(height: 30)
                 .foregroundColor(Constants.AppColor.secondaryBlack)
@@ -146,6 +152,21 @@ struct HomeView: View {
             .onAppear{
                 CommonAnalyticsHandler.track(eventName: "home_screen_viewed")
             }
+        }
+    }
+}
+
+struct BadgeView: View {
+    var count: UInt
+    
+    var body: some View {
+        if count > 0 {
+            Text("\(count)")
+                .font(.caption2)
+                .foregroundColor(.white)
+                .padding(4)
+                .background(Color.red)
+                .clipShape(Circle())
         }
     }
 }

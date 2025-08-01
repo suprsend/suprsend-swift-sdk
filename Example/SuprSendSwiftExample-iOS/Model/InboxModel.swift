@@ -9,54 +9,20 @@ import Foundation
 import SuprSend
 import Combine
 
-struct Action {
-    let id = UUID()
-    let name: String
-    let url: URL?
-    let useBrowser: Bool
-    
-    static func with(_ action: IActionObject) -> Action {
-        Action(
-            name: action.name,
-            url: URL(string: action.url),
-            useBrowser: action.open_in_new_tab ?? false
-        )
-    }
-}
-
-struct Message {
-    let id: String
-    let header: String
-    let text: String
-    let isRead: Bool
-    let time: String
-    let url: URL?
-    let useBrowser: Bool
-    let actions: [Action]
-    
-    static func with(_ notification: IRemoteNotification) -> Message {
-        Message(
-            id: notification.n_id,
-            header: notification.message.header ?? "",
-            text: notification.message.text,
-            isRead: notification.read_on != nil,
-            time: Date(timeIntervalSince1970: notification.created_on).formatDate(format: "d MMM"),
-            url: URL(string: notification.message.url ?? ""),
-            useBrowser: notification.message.open_in_new_tab ?? false,
-            actions: notification.message.actions?.map(Action.with) ?? []
-        )
-    }
-}
-
 class InboxViewModel: ObservableObject {
     @Published var isLoading: Bool
-    private var feedData: FeedData? {
+    @Published var messages: [Message] = []
+    @Published var count: UInt = .zero
+    
+    private var feed: Feed
+    private var cancellables: Set<AnyCancellable> = []
+    private var feedData: IFeedData? {
         didSet {
-            messages = feedData?.results?.map(Message.with) ?? []
+            messages = feedData?.notifications.map(Message.with) ?? []
+            count = UInt(feedData?.meta["badge"] ?? "") ?? .zero
         }
     }
-    @Published var messages: [Message] = []
-    private var feed: Feed
+    
     
     init() {
         
@@ -72,6 +38,20 @@ class InboxViewModel: ObservableObject {
         feed = SuprSend.shared.feeds.initialize(options: feedOptions)
         
         isLoading = true
+        
+        feed.emitter
+            .receive(on: RunLoop.main)
+            .sink { event in
+                switch event {
+                case .newNotification(let remoteNotification):
+                    break
+                    
+                case .storeUpdate(let feedData):
+                    self.feedData = feedData
+                }
+            }
+            .store(in: &cancellables)
+        
         fetchAll()
     }
     
@@ -111,9 +91,55 @@ extension InboxViewModel {
         Task {
             let result = await feed.fetch()
             DispatchQueue.main.async {
-                self.feedData = result.body
                 self.isLoading = false
             }
+            
+            fetchMore()
         }
+    }
+    
+    func fetchMore() {
+        Task {
+            let result = await feed.fetchNextPage()
+        }
+    }
+}
+
+struct Action {
+    let id = UUID()
+    let name: String
+    let url: URL?
+    let useBrowser: Bool
+    
+    static func with(_ action: IActionObject) -> Action {
+        Action(
+            name: action.name,
+            url: URL(string: action.url),
+            useBrowser: action.open_in_new_tab ?? false
+        )
+    }
+}
+
+struct Message {
+    let id: String
+    let header: String
+    let text: String
+    let isRead: Bool
+    let time: String
+    let url: URL?
+    let useBrowser: Bool
+    let actions: [Action]
+    
+    static func with(_ notification: IRemoteNotification) -> Message {
+        Message(
+            id: notification.n_id,
+            header: notification.message.header ?? "",
+            text: notification.message.text,
+            isRead: notification.read_on != nil,
+            time: Date(timeIntervalSince1970: notification.created_on).formatDate(format: "d MMM"),
+            url: URL(string: notification.message.url ?? ""),
+            useBrowser: notification.message.open_in_new_tab ?? false,
+            actions: notification.message.actions?.map(Action.with) ?? []
+        )
     }
 }

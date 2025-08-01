@@ -68,5 +68,12 @@ class FeedTest {
         #expect(responseCount.body?.results != nil)
         #expect(responseCount.body?.meta != nil)
     }
+    
+    @Test func fetchNextPage() async throws {
+        let responseCount = await feed.fetchNextPage()
+        
+        #expect(responseCount.error?.type == nil)
+        #expect(responseCount.error?.message == nil)
+    }
 
 }
