@@ -26,6 +26,8 @@ public class Feed {
     
     private var expiryTimerId: Timer?
     
+    public var emitter: PassthroughSubject<InboxEmitterEvents, Never> = .init()
+    
     public var data: IFeedData {
         let storeData = store.value
         
@@ -86,7 +88,7 @@ public class Feed {
             apiStatus: .initial,
             isFirstFetch: true
         ))
-//        this.emitter.emit('feed.store_update', this.data)
+        emitter.send(.storeUpdate(self.data))
         
         if (expiryTimerId != nil) {
             expiryTimerId?.invalidate()
@@ -96,7 +98,7 @@ public class Feed {
     
     func remove() {
         reset()
-//        emitter.off('*')
+        emitter.send(completion: .finished)
 //        socket?.disconnect()
         config.feeds.removeInstance(self)
     }
@@ -170,13 +172,13 @@ extension Feed {
             store.send(store.value.with(meta: meta))
         }
         
-        //        this.emitter.emit('feed.store_update', this.data)
+        emitter.send(.storeUpdate(self.data))
         return response
     }
     
     // TODO: support other stores and pages
     public func fetch(options: IInboxFetchOptions? = nil) async -> FeedAPIResponse {
-        let storeData = store.value
+        var storeData = store.value
         
         if requestInprogress {
             return .error(.init(type: .validation, message: "Already fetching data"))
@@ -188,11 +190,10 @@ extension Feed {
             store.send(storeData.with(apiStatus: .fetchingMore))
         } else {
             store.send(storeData.with(apiStatus: .loading))
-            Task {
-                await fetchCount()
-            }
+            await fetchCount()
         }
-        //        this.emitter.emit('feed.store_update', this.data)
+        storeData = store.value
+        emitter.send(.storeUpdate(self.data))
         
         var queryParams: [String: Any?] = [
             "distinct_id": config.distinctID,
@@ -222,18 +223,22 @@ extension Feed {
         
         if (response.status == .error) {
             store.send(store.value.with(apiStatus: .error))
-            //            this.emitter.emit('feed.store_update', this.data)
+            emitter.send(.storeUpdate(self.data))
             return response
         }
         
         var notifications = storeData.notifications
-        if !storeData.isFirstFetch, let results = response.body?.results {
+        let results = response.body?.results ?? []
+        if storeData.isFirstFetch {
+            notifications = results
+        } else  {
             notifications.append(contentsOf: results)
         }
         
-        var pageInfo = IPageInfo.init(
+        let hasMore = (response.body?.meta?.current_page ?? 0) < (response.body?.meta?.total_pages ?? 0)
+        let pageInfo = IPageInfo.init(
             total: response.body?.meta?.total_count ?? 0,
-            hasMore: response.body?.meta?.current_page == response.body?.meta?.total_pages,
+            hasMore: hasMore,
             pageSize: storeData.pageInfo.pageSize
         )
         
@@ -249,7 +254,7 @@ extension Feed {
                 )
             )
         
-        //        this.emitter.emit('feed.store_update', this.data)
+        emitter.send(.storeUpdate(self.data))
         
         startExpiryTimer()
         
@@ -307,7 +312,7 @@ extension Feed {
             "distinct_id": config.distinctID,
         ])
         
-//        this.emitter.emit('feed.store_update', this.data)
+        emitter.send(.storeUpdate(self.data))
         return await config
             .client()
             .request(
@@ -346,7 +351,7 @@ extension Feed {
             "distinct_id": config.distinctID,
         ])
         
-        //        this.emitter.emit('feed.store_update', this.data)
+        emitter.send(.storeUpdate(self.data))
         return await config
             .client()
             .request(
@@ -385,7 +390,7 @@ extension Feed {
             "distinct_id": config.distinctID,
         ])
         
-        //        this.emitter.emit('feed.store_update', this.data)
+        emitter.send(.storeUpdate(self.data))
         return await config
             .client()
             .request(
@@ -422,7 +427,8 @@ extension Feed {
             "distinct_id": config.distinctID,
         ])
         
-        //        this.emitter.emit('feed.store_update', this.data)
+        emitter.send(.storeUpdate(self.data))
+        
         return await config
             .client()
             .request(
@@ -457,7 +463,8 @@ extension Feed {
             "distinct_id": config.distinctID,
         ])
         
-        //        this.emitter.emit('feed.store_update', this.data)
+        emitter.send(.storeUpdate(self.data))
+        
         return await config
             .client()
             .request(
@@ -489,7 +496,8 @@ extension Feed {
             "distinct_id": config.distinctID,
         ])
         
-        //        this.emitter.emit('feed.store_update', this.data)
+        emitter.send(.storeUpdate(self.data))
+        
         return await config
             .client()
             .request(
@@ -514,7 +522,8 @@ extension Feed {
             "distinct_id": config.distinctID
         ])
         
-//        this.emitter.emit('feed.store_update', this.data)
+        emitter.send(.storeUpdate(self.data))
+        
         return await config
             .client()
             .request(
@@ -548,7 +557,8 @@ extension Feed {
             "distinct_id": config.distinctID,
         ])
         
-        //        this.emitter.emit('feed.store_update', this.data)
+        emitter.send(.storeUpdate(self.data))
+        
         return await config
             .client()
             .request(
@@ -592,7 +602,7 @@ extension Feed {
         if (hasExpired) {
             store.send(store.value.with(notifications: notifications))
             await fetchCount()
-//            this.emitter.emit('feed.store_update', this.data)
+            emitter.send(.storeUpdate(self.data))
         }
     }
 }

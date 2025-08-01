@@ -13,7 +13,7 @@ struct InboxView: View {
     @StateObject var theme = ThemeManager()
     @Environment(\.colorScheme) var colorScheme
     
-    @StateObject var viewModel = InboxViewModel()
+    @ObservedObject var viewModel: InboxViewModel
     
     var body: some View {
         VStack(alignment: .leading) {
@@ -45,10 +45,12 @@ struct InboxView: View {
                                     viewModel.archive(item: item)
                                 }
                             } label: {
-                                Image(systemName: "ellipsis.circle")
+                                Image(systemName: "ellipsis")
+                                    .frame(width: 24, height: 32)
+                                    .foregroundStyle(theme.color.subtitle)
                             }
                             .padding()
-                            .padding(.top, 20)
+                            .padding(.top, 16)
                         }
                 }
                 .listStyle(.plain)
@@ -86,7 +88,7 @@ struct MessageView: View {
                 .resizable()
                 .frame(width: 36, height: 36)
                 .clipShape(.circle)
-                .foregroundStyle(theme.color.tint)
+                .foregroundStyle(Color(red: 0.79, green: 0.83, blue: 0.88))
             
             VStack(alignment: .leading) {
                 VStack(alignment: .leading, spacing: 4.0) {
@@ -102,7 +104,7 @@ struct MessageView: View {
                             .foregroundStyle(theme.color.subtitle)
                     }
                     
-                    Text(message.text)
+                    Text(.init(message.text))
                         .font(theme.font.subtitle)
                         .foregroundStyle(theme.color.subtitle)
                 }

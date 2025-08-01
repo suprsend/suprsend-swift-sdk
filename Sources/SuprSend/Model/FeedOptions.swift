@@ -150,3 +150,8 @@ public class IFeedData: NSObject {
         self.apiStatus = apiStatus
     }
 }
+
+public enum InboxEmitterEvents {
+    case newNotification(IRemoteNotification)
+    case storeUpdate(IFeedData)
+}

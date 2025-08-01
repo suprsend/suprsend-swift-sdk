@@ -16,7 +16,7 @@ struct CommonAnalyticsHandler {
     }
     
     static func identify(identity: String) {
-        Task { @MainActor in
+        Task {
             let token = await getToken(for: identity)
             _ = await SuprSend.shared.identify(distinctID: identity, userToken: token, options: AuthenticateOptions(refreshUserToken: { oldUserToken, tokenPayload in
                 await getToken(for: identity)

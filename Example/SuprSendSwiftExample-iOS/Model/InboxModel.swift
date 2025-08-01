@@ -50,13 +50,18 @@ struct Message {
 
 class InboxViewModel: ObservableObject {
     @Published var isLoading: Bool
-    private var feedData: FeedData? {
+    @Published var messages: [Message] = []
+    @Published var count: UInt = .zero
+    
+    private var feed: Feed
+    private var cancellables: Set<AnyCancellable> = []
+    private var feedData: IFeedData? {
         didSet {
-            messages = feedData?.results?.map(Message.with) ?? []
+            messages = feedData?.notifications.map(Message.with) ?? []
+            count = UInt(feedData?.meta["badge"] ?? "") ?? .zero
         }
     }
-    @Published var messages: [Message] = []
-    private var feed: Feed
+    
     
     init() {
         
@@ -72,6 +77,20 @@ class InboxViewModel: ObservableObject {
         feed = SuprSend.shared.feeds.initialize(options: feedOptions)
         
         isLoading = true
+        
+        feed.emitter
+            .receive(on: RunLoop.main)
+            .sink { event in
+                switch event {
+                case .newNotification(let remoteNotification):
+                    break
+                    
+                case .storeUpdate(let feedData):
+                    self.feedData = feedData
+                }
+            }
+            .store(in: &cancellables)
+        
         fetchAll()
     }
     
@@ -111,9 +130,16 @@ extension InboxViewModel {
         Task {
             let result = await feed.fetch()
             DispatchQueue.main.async {
-                self.feedData = result.body
                 self.isLoading = false
             }
+            
+            fetchMore()
+        }
+    }
+    
+    func fetchMore() {
+        Task {
+            let result = await feed.fetchNextPage()
         }
     }
 }
