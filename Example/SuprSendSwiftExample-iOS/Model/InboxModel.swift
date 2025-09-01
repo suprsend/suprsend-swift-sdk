@@ -36,6 +36,7 @@ class InboxViewModel: ObservableObject {
             )
         )
         feed = SuprSend.shared.feeds.initialize(options: feedOptions)
+        feed.initializeSocketConnection()
         
         isLoading = true
         
