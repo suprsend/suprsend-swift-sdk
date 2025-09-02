@@ -7,6 +7,7 @@
 
 import Foundation
 import Network
+import Combine
 
 /// Socket Connection Manager
 class SocketClient: NSObject, ObservableObject {
@@ -19,12 +20,16 @@ class SocketClient: NSObject, ObservableObject {
             case notificationUpdate = "notification_update"
             case newNotification = "new_notification"
             case resetBadge = "reset_badge"
-            case bulklNotificationUpdate = "bulk_notification_update"
+            case bulkNotificationUpdate = "bulk_notification_update"
         }
         
         init(from decoder: any Decoder) throws {
             let container = try decoder.singleValueContainer()
             let parts = try container.decode([AnyDecodable].self)
+            
+            guard !parts.isEmpty else {
+                throw DecodingError.dataCorruptedError(in: container, debugDescription: "Empty Data")
+            }
             
             if case .some(.string(let string)) = parts.first,
                 !string.isEmpty {
@@ -35,7 +40,8 @@ class SocketClient: NSObject, ObservableObject {
                 
                 self.event = event
                 
-                if case .some(.object(let dictionary)) = parts.last {
+                if parts.count == 2,
+                   case .some(.object(let dictionary)) = parts.last {
                     self.data = dictionary
                 } else {
                     self.data = nil
@@ -51,12 +57,12 @@ class SocketClient: NSObject, ObservableObject {
     private var urlSession: URLSession?
     
     // Keep-alive configuration
-    private var pingTimer: Timer?
-    private var heartbeatTimer: Timer?
+    private var pingTask: Task<Void, Never>?
+    private var heartbeatTask: Task<Void, Never>?
     private var reconnectionTimer: Timer?
     
-    private let pingInterval: TimeInterval = 5.0
-    private let heartbeatTimeout: TimeInterval = 20.0
+    private let pingInterval: UInt64 = 25_000_000_000
+    private let heartbeatTimeout: UInt64 = 20_000_000_000
     private let reconnectInterval: TimeInterval = 5.0
     
     // Connection state
@@ -64,11 +70,13 @@ class SocketClient: NSObject, ObservableObject {
     private var reconnectionAttempts = 0
     private let maxReconnectionAttempts = 25
     
+    private var userInitiatedDisconnect: Bool = false
+    
     private var serverURL: String
     private var headers: [String: String]
     
     @Published var connectionStatus: ConnectionStatus = .disconnected
-    @Published var receivedMessages: [SocketMessage] = []
+    let receivedMessage: PassthroughSubject<SocketMessage, Never> = .init()
     @Published var error: String?
     
     enum ConnectionStatus {
@@ -87,6 +95,10 @@ class SocketClient: NSObject, ObservableObject {
         setupURLSession()
     }
     
+    deinit {
+        disconnect()
+    }
+    
     private func setupURLSession() {
         let config = URLSessionConfiguration.default
         urlSession = URLSession(configuration: config, delegate: self, delegateQueue: OperationQueue())
@@ -95,15 +107,16 @@ class SocketClient: NSObject, ObservableObject {
     // Connect to WebSocket
     func connect() {
         guard let url = URL(string: serverURL) else {
-            print("Invalid URL: \(serverURL)")
+            logger.error("Invalid URL: \(serverURL)")
             return
         }
         
         guard connectionStatus != .connected && connectionStatus != .connecting else {
-            print("Already connected or connecting")
+            logger.info("Already connected or connecting")
             return
         }
         
+        userInitiatedDisconnect = false
         connectionStatus = .connecting
         
         var request = URLRequest(url: url)
@@ -119,63 +132,82 @@ class SocketClient: NSObject, ObservableObject {
         
         // Start listening for messages
         listen()
-        
-        // Monitor connection status
-        monitorConnection()
     }
     
     // Disconnect from WebSocket
     func disconnect() {
-        print("🔌 Disconnecting...")
+        userInitiatedDisconnect = true
+        logger.info("🔌 Disconnecting...")
         stopKeepAlive()
         webSocketTask?.cancel(with: .goingAway, reason: nil)
         webSocketTask = nil
         connectionStatus = .disconnected
+        reconnectionAttempts = 0
     }
     
     private func startKeepAlive() {
         lastPongReceived = Date()
         
         // Start ping timer
-        pingTimer = Timer.scheduledTimer(withTimeInterval: pingInterval, repeats: true) { [weak self] _ in
-            self?.sendPing()
+        pingTask = Task {
+            while !Task.isCancelled {
+                // Wait 30 seconds
+                try? await Task.sleep(nanoseconds: pingInterval)
+                
+                // Check if still should continue
+                guard !Task.isCancelled else { break }
+                
+                // Send heartbeat on main thread
+                await MainActor.run {
+                    sendPing()
+                }
+            }
         }
         
         // Start heartbeat monitor
-        heartbeatTimer = Timer.scheduledTimer(withTimeInterval: heartbeatTimeout, repeats: true) { [weak self] _ in
-            self?.checkHeartbeat()
+        heartbeatTask = Task {
+            while !Task.isCancelled {
+                // Wait 30 seconds
+                try? await Task.sleep(nanoseconds: heartbeatTimeout)
+                
+                // Check if still should continue
+                guard !Task.isCancelled else { break }
+                
+                // Send heartbeat on main thread
+                await MainActor.run {
+                    checkHeartbeat()
+                }
+            }
         }
         
-        print("Keep-alive started - ping every \(pingInterval)s, timeout after \(heartbeatTimeout)s")
+        logger.info("Keep-alive started - ping every \(pingInterval)s, timeout after \(heartbeatTimeout)s")
     }
     
     private func stopKeepAlive() {
-        pingTimer?.invalidate()
-        heartbeatTimer?.invalidate()
+        pingTask?.cancel()
+        heartbeatTask?.cancel()
         reconnectionTimer?.invalidate()
         
-        pingTimer = nil
-        heartbeatTimer = nil
+        pingTask = nil
+        heartbeatTask = nil
         reconnectionTimer = nil
     }
     
     // Send text message
-    func sendMessage(_ message: String) {
+    func sendMessage(_ text: String) {
         guard connectionStatus == .connected else {
-            print("❌ Cannot send message - not connected")
+            logger.error("❌ Cannot send message - not connected")
             return
         }
         
-        let message = URLSessionWebSocketTask.Message.string(message)
+        let message = URLSessionWebSocketTask.Message.string(text)
         webSocketTask?.send(message) { [weak self] error in
-            DispatchQueue.main.async {
-                if let error = error {
-                    self?.connectionStatus = .error
-                    self?.error = "Send failed: \(error.localizedDescription)"
-                    print("❌ Send error: \(error)")
-                } else {
-                    print("✅ Message sent: \(message)")
-                }
+            if let error = error {
+                self?.connectionStatus = .error
+                self?.error = "Send failed: \(error.localizedDescription)"
+                logger.error("❌ Send error: \(error)")
+            } else {
+                logger.info("✅ Message sent")
             }
         }
     }
@@ -184,12 +216,10 @@ class SocketClient: NSObject, ObservableObject {
     func sendData(_ data: Data) {
         let message = URLSessionWebSocketTask.Message.data(data)
         webSocketTask?.send(message) { [weak self] error in
-            DispatchQueue.main.async {
-                if let error = error {
-                    self?.connectionStatus = .error
-                    self?.error = "Send failed: \(error.localizedDescription)"
-                    print("WebSocket send error: \(error)")
-                }
+            if let error = error {
+                self?.connectionStatus = .error
+                self?.error = "Send failed: \(error.localizedDescription)"
+                logger.error("WebSocket send error: \(error)")
             }
         }
     }
@@ -197,46 +227,48 @@ class SocketClient: NSObject, ObservableObject {
     // Listen for incoming messages
     private func listen() {
         webSocketTask?.receive { [weak self] result in
+            guard let self else { return }
             switch result {
             case .success(let message):
                 switch message {
                 case .string(let text):
-                    self?.handleTextMessage(text)
+                    self.handleTextMessage(text)
                 case .data(let data):
-                    self?.handleDataMessage(data)
+                    self.handleDataMessage(data)
                 @unknown default:
                     break
                 }
                 
                 // Continue listening
-                self?.listen()
+                self.listen()
                 
             case .failure(let error):
-                DispatchQueue.main.async {
-                    self?.connectionStatus = .error
-                    self?.error = "Receive failed: \(error.localizedDescription)"
+                self.connectionStatus = .error
+                self.error = "Receive failed: \(error.localizedDescription)"
+                logger.error("Receive failed: \(error.localizedDescription)")
+                if !self.userInitiatedDisconnect {
+                    self.handleConnectionLost()
                 }
-                self?.handleConnectionLost()
             }
         }
     }
     
     
     private func handleTextMessage(_ text: String) {
-        print("📨 Received: \(text)")
-        
         // Handle pong or other keep-alive messages
-        if text.lowercased().contains("pong"){
+        if text.starts(with: "3"){
             lastPongReceived = Date()
-            print("🏓 Pong received")
+            logger.info("🏓 Pong received")
         } else if text.starts(with: "0") {
             sendAuthMessage()
         } else if text.starts(with: "2") {
-            print("🏓 Ping received")
+            lastPongReceived = Date()
+            logger.info("🏓 Ping received")
             sendMessage("3")
         } else if text.starts(with: "42") {
             let message = text.suffix(from: text.index(text.startIndex, offsetBy: 2))
             parseSocketMessage(jsonString: String(message))
+            logger.info("📨 Received: \(text)")
         }
     }
     
@@ -249,11 +281,9 @@ class SocketClient: NSObject, ObservableObject {
             let message = try JSONDecoder()
                 .decode(SocketMessage.self, from: data)
             
-            DispatchQueue.main.async {
-                self.receivedMessages.append(message)
-            }
+            self.receivedMessage.send(message)
         } catch {
-            debugPrint("Socket message decoding error: \(error)")
+            logger.warning("Socket message decoding error: \(error)")
         }
     }
     
@@ -263,57 +293,53 @@ class SocketClient: NSObject, ObservableObject {
             let message = String(data: auth, encoding: .utf8) ?? ""
             sendMessage("40" + message)
         } catch {
-            debugPrint("Auth message encoding error: \(error)")
+            logger.warning("Auth message encoding error: \(error)")
         }
     }
     
     private func handleDataMessage(_ data: Data) {
-        print("📦 Received data: \(data.count) bytes")
+        logger.info("📦 Received data: \(data.count) bytes")
     }
-    
-    // Monitor connection status
-    private func monitorConnection() {
-        // Check if connection is established
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            guard let self = self else { return }
-            
-            if self.webSocketTask?.state == .running {
-                self.connectionStatus = .connected
-            } else if self.webSocketTask?.state == .canceling || self.webSocketTask?.state == .completed {
-                self.connectionStatus = .disconnected
-            }
-        }
-    }
-
-    private func sendPing() {
-        guard connectionStatus == .connected else { return }
-        
-        webSocketTask?.sendPing { [weak self] error in
-            if let error = error {
-                print("❌ Ping failed: \(error)")
-                self?.connectionStatus = .error
-                self?.error = "Ping failed: \(error.localizedDescription)"
-                self?.handleConnectionLost()
-            } else {
-                print("📡 Ping sent")
-            }
-        }
-    }
-    
     
     private func checkHeartbeat() {
         let timeSinceLastPong = Date().timeIntervalSince(lastPongReceived)
         
-        if timeSinceLastPong > heartbeatTimeout {
-            print("💔 Heartbeat timeout - no pong received for \(timeSinceLastPong)s")
+        if isTimeIntervalGreater(timeSinceLastPong, than: heartbeatTimeout) {
+            logger.warning("💔 Heartbeat timeout - no pong received for \(timeSinceLastPong)s")
             handleConnectionLost()
         }
     }
     
-    private func handleConnectionLost() {
-        guard connectionStatus == .connected else { return }
+    private func sendPing() {
+        let timeSinceLastPong = Date().timeIntervalSince(lastPongReceived)
         
-        print("🔌 Connection lost - attempting reconnection")
+        if isTimeIntervalGreater(timeSinceLastPong, than: heartbeatTimeout) {
+            sendMessage("2")
+        }
+    }
+    
+    private func isTimeIntervalGreater(_ interval: TimeInterval, than nanoseconds: UInt64) -> Bool {
+        // Handle edge cases
+        guard interval >= 0 else { return false }
+        
+        // Convert to nanoseconds for comparison
+        let intervalAsNanos = interval * 1_000_000_000
+        
+        // Check for overflow
+        if intervalAsNanos > Double(UInt64.max) {
+            return true  // TimeInterval is definitely larger
+        }
+        
+        return UInt64(intervalAsNanos) > nanoseconds
+    }
+
+    
+    private func handleConnectionLost() {
+        if connectionStatus == .connected || connectionStatus == .connecting {
+            return
+        }
+        
+        logger.error("🔌 Connection lost - attempting reconnection")
         connectionStatus = .disconnected
         stopKeepAlive()
         
@@ -322,7 +348,7 @@ class SocketClient: NSObject, ObservableObject {
     
     private func scheduleReconnection() {
         guard reconnectionAttempts < maxReconnectionAttempts else {
-            print("❌ Max reconnection attempts reached")
+            logger.error("❌ Max reconnection attempts reached")
             return
         }
         
@@ -331,7 +357,7 @@ class SocketClient: NSObject, ObservableObject {
         // Exponential backoff with max delay
         let delay = min(reconnectInterval * Double(reconnectionAttempts), 30.0)
         
-        print("🔄 Reconnecting in \(delay)s (attempt \(reconnectionAttempts)/\(maxReconnectionAttempts))")
+        logger.warning("🔄 Reconnecting in \(delay)s (attempt \(reconnectionAttempts)/\(maxReconnectionAttempts))")
         
         reconnectionTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
             self?.connect()
@@ -343,7 +369,7 @@ class SocketClient: NSObject, ObservableObject {
 // MARK: - URLSessionWebSocketDelegate
 extension SocketClient: URLSessionWebSocketDelegate {
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
-        print("✅ WebSocket connected")
+        logger.info("✅ WebSocket connected")
         connectionStatus = .connected
         reconnectionAttempts = 0
         lastPongReceived = Date()
@@ -352,10 +378,10 @@ extension SocketClient: URLSessionWebSocketDelegate {
     }
     
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
-        print("🔌 WebSocket closed with code: \(closeCode)")
+        logger.warning("🔌 WebSocket closed with code: \(closeCode)")
         
         if let reason = reason, let reasonString = String(data: reason, encoding: .utf8) {
-            print("Close reason: \(reasonString)")
+            logger.info("Close reason: \(reasonString)")
         }
         
         connectionStatus = .disconnected

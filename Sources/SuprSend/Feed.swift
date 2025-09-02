@@ -79,6 +79,10 @@ public class Feed {
         )
     }
     
+    deinit {
+        remove()
+    }
+    
     func reset() {
         store.send(.init(
             notifications: [],
@@ -103,16 +107,18 @@ public class Feed {
     func remove() {
         reset()
         emitter.send(completion: .finished)
-//        socket?.disconnect()
+        socket?.disconnect()
+        socket = nil
+        cancellables.removeAll()
         config.feeds.removeInstance(self)
     }
     
     private static func validatedStores(_ stores: [IStore]?) -> [IStore]? {
         guard let stores = stores else {
-            return stores
+            return nil
         }
         
-        guard stores.isEmpty else {
+        guard !stores.isEmpty else {
             logger.warning("SuprSend: stores should be an array of objects")
             return stores
         }
@@ -121,7 +127,7 @@ public class Feed {
         
         stores.forEach(
             { store in
-                guard store.storeId.isEmpty else {
+                guard !store.storeId.isEmpty else {
                     logger.warning(
                         "SuprSend: storeId is mandatory for each store. Ignoring store without storeId"
                     )
@@ -156,7 +162,7 @@ extension Feed {
     }
     
     public func fetchCount() async -> FeedCountAPIResponse {
-        let queryParams: [String: Any?] = [
+        let queryParams: [String: Encodable?] = [
             "distinct_id": config.distinctID,
             "tenant_id": feedOptions.tenantId,
             "stores": feedOptions.stores != nil
@@ -167,7 +173,7 @@ extension Feed {
         let url = getUrl(path: "notifications_count", qp: queryParams)
         
         let response: FeedCountAPIResponse = await config.client().request(
-            reqData: .init(path: url.absoluteString, payload: nil, type: .get)
+            reqData: .init(path: url, payload: nil, type: .get)
         )
         
         if (response.status == .success) {
@@ -198,7 +204,7 @@ extension Feed {
         storeData = store.value
         emitter.send(.storeUpdate(self.data))
         
-        var queryParams: [String: Any?] = [
+        var queryParams: [String: Encodable?] = [
             "distinct_id": config.distinctID,
             "tenant_id": feedOptions.tenantId,
             "page_size": pageSize,
@@ -207,21 +213,23 @@ extension Feed {
             : nil,
         ]
         
+        let searchAfter: [Double]
         if (storeData.notifications.count > 0) {
             let lastNotification =
             storeData.notifications[storeData.notifications.count - 1]
-            queryParams["search_after"] = [
-                lastNotification.is_pinned,
+            searchAfter = [
+                lastNotification.is_pinned ? 1 : 0,
                 lastNotification.created_on,
             ]
         } else {
-            queryParams["search_after"] = []
+            searchAfter = []
         }
+        queryParams["search_after"] = searchAfter
         
         let url = getUrl(path: "notifications", qp: queryParams)
         
         let response: FeedAPIResponse = await config.client().request(
-            reqData: .init(path: url.absoluteString, payload: nil, type: .get)
+            reqData: .init(path: url, payload: nil, type: .get)
         )
         
         if (response.status == .error) {
@@ -265,7 +273,7 @@ extension Feed {
     }
     
     // TODO: support other stores
-    public func fetchNextPage() async -> FeedAPIResponse? {
+    public func fetchNextPage() async -> FeedAPIResponse {
         let storeData = store.value
         
         guard storeData.pageInfo.hasMore == true else {
@@ -284,7 +292,7 @@ extension Feed {
         return await config
             .client()
             .request(
-                reqData: .init(path: url.absoluteString, payload: nil, type: .get)
+                reqData: .init(path: url, payload: nil, type: .get)
             )
     }
     
@@ -320,7 +328,7 @@ extension Feed {
             .client()
             .request(
                 reqData: .init(
-                    path: url.absoluteString,
+                    path: url,
                     payload: nil,
                     type: .patch
                 )
@@ -359,7 +367,7 @@ extension Feed {
             .client()
             .request(
                 reqData: .init(
-                    path: url.absoluteString,
+                    path: url,
                     payload: nil,
                     type: .patch
                 )
@@ -398,7 +406,7 @@ extension Feed {
             .client()
             .request(
                 reqData: .init(
-                    path: url.absoluteString,
+                    path: url,
                     payload: nil,
                     type: .patch
                 )
@@ -411,17 +419,18 @@ extension Feed {
         
         store.send(storeData.with(
             notifications: storeData.notifications.map({ notification in
+                var newNotification = notification
                 if (notification.n_id == notificationId) {
                     if (notification.interacted_on == nil) {
-                        return notification
+                        newNotification = newNotification
                             .with(interacted_on: Date.now.timeIntervalSince1970)
                     }
                     if (notification.read_on == nil) {
-                        return notification
+                        newNotification = newNotification
                             .with(read_on: Date.now.timeIntervalSince1970)
                     }
                 }
-                return notification
+                return newNotification
             }),
         ))
         
@@ -436,7 +445,7 @@ extension Feed {
             .client()
             .request(
                 reqData: .init(
-                    path: url.absoluteString,
+                    path: url,
                     payload: nil,
                     type: .patch
                 )
@@ -472,7 +481,7 @@ extension Feed {
             .client()
             .request(
                 reqData: .init(
-                    path: url.absoluteString,
+                    path: url,
                     payload: nil,
                     type: .patch
                 )
@@ -505,7 +514,7 @@ extension Feed {
             .client()
             .request(
                 reqData: .init(
-                    path: url.absoluteString,
+                    path: url,
                     payload: .init(["notification_ids": notificationIds]),
                     type: .post
                 )
@@ -531,7 +540,7 @@ extension Feed {
             .client()
             .request(
                 reqData: .init(
-                    path: url.absoluteString,
+                    path: url,
                     payload: nil,
                     type: .patch
                 )
@@ -566,7 +575,7 @@ extension Feed {
             .client()
             .request(
                 reqData: .init(
-                    path: url.absoluteString,
+                    path: url,
                     payload: nil,
                     type: .patch
                 )
@@ -581,10 +590,10 @@ extension Feed {
             return
         }
         expiryTimerId =
-            .scheduledTimer(timeInterval: 30000, target: self, selector: #selector(removeExpiredFeed), userInfo: nil, repeats: true)
+            .scheduledTimer(timeInterval: 30, target: self, selector: #selector(removeExpiredFeed), userInfo: nil, repeats: true)
     }
     
-    @objc private func removeExpiredFeed() async {
+    @objc private func removeExpiredFeed() {
         let storeData = store.value
         var hasExpired = false
         
@@ -604,8 +613,10 @@ extension Feed {
         
         if (hasExpired) {
             store.send(store.value.with(notifications: notifications))
-            await fetchCount()
-            emitter.send(.storeUpdate(self.data))
+            Task {
+                await fetchCount()
+                emitter.send(.storeUpdate(self.data))
+            }
         }
     }
 }
@@ -634,7 +645,7 @@ extension Feed {
         return apiStores
     }
     
-    private func validateQueryParams(_ queryParams: [String: Any?]) -> [String: String] {
+    private func validateQueryParams(_ queryParams: [String: Encodable?]) -> [String: String] {
         var validatedParams: [String: String] = [:]
         for (key, paramValue) in queryParams {
             do {
@@ -644,9 +655,6 @@ extension Feed {
                 
                 if let string = value as? String {
                     validatedParams[key] = string
-                        .addingPercentEncoding(
-                            withAllowedCharacters: .urlQueryAllowed
-                        )
                 } else {
                     let encodedValue = try JSONEncoder().encode(value)
                     validatedParams[key] = String(data: encodedValue, encoding: .utf8)
@@ -658,16 +666,20 @@ extension Feed {
         return validatedParams
     }
     
-    private func getUrl(path: String, qp: [String: Any?]) -> URL {
-        let urlPath = "\(feedOptions.host?.apiHost ?? "")/v1/feed/\(path)"
+    private func getUrl(path: String, qp: [String: Encodable?]) -> String {
+        let host = feedOptions.host?.apiHost ?? ""
+        let urlPath = "\(host)/v1/feed/\(path)"
         let validatedQueryParams = validateQueryParams(qp)
         let queryParams = validatedQueryParams.map { URLQueryItem(name: $0.key, value: $0.value) }
         
-        var urlComponents = URLComponents(string: urlPath)!
+        guard var urlComponents = URLComponents(string: urlPath) else {
+            return urlPath
+        }
+        
         if !queryParams.isEmpty {
             urlComponents.queryItems = queryParams
         }
-        return urlComponents.url!
+        return urlComponents.url?.absoluteString ?? urlPath
     }
 }
 
@@ -777,24 +789,27 @@ extension Feed {
     }
     
     private func initializeSocketEvents() {
-        socket?.$receivedMessages
+        socket?.receivedMessage
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] messages in
-                let lastMessage = messages.last
+            .sink { [weak self] message in
                 
-                switch lastMessage?.event {
+                switch message.event {
                 case .newNotification:
                     Task {
-                        await self?.handleNewNotificationSocketEvent(data: lastMessage?.data)
+                        await self?.handleNewNotificationSocketEvent(
+                            data: message.data
+                        )
                     }
                 case .notificationUpdate:
                     Task {
-                        await self?.handleNoticationUpdateSocketEvent(data: lastMessage?.data)
+                        await self?.handleNotificationUpdateSocketEvent(
+                            data: message.data
+                        )
                     }
-                case .bulklNotificationUpdate:
+                case .bulkNotificationUpdate:
                     Task {
                         await self?.handleBulkNotificationUpdateSocketEvent(
-                            data: lastMessage?.data
+                            data: message.data
                         )
                     }
                 case .resetBadge:
@@ -868,7 +883,7 @@ extension Feed {
     }
 
     
-    private func handleNoticationUpdateSocketEvent(data: [String: AnyDecodable]?) async {
+    private func handleNotificationUpdateSocketEvent(data: [String: AnyDecodable]?) async {
         guard let nid = data?["n_id"],
               case .string(let notificationId) = nid else { return }
         
@@ -943,18 +958,19 @@ extension Feed {
             var meta = storeData.meta
             meta["badge"] = "0"
             
-            store.send(storeData.with(meta: meta)
-                .with(notifications: storeData
-                    .with(meta: meta)
-                    .notifications.map({ notification in
-                        if (notification.read_on == nil) {
-                            notification
-                                .with(read_on: Date.now.timeIntervalSince1970)
-                        } else {
-                            notification
-                        }
-                    }),
-                ))
+            let notifications = storeData.notifications.map { notification in
+                if (notification.read_on == nil) {
+                    notification
+                        .with(read_on: Date.now.timeIntervalSince1970)
+                } else {
+                    notification
+                }
+            }
+            
+            store.send(storeData
+                .with(meta: meta)
+                .with(notifications: notifications)
+            )
         }
         
         if actionType == "seen",
