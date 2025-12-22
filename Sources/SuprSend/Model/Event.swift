@@ -120,11 +120,17 @@ struct UserProperty: Encodable {
     /// Encodes the `UserProperty` instance into the given encoder.
     /// - Parameter encoder: The encoder to use for encoding.
     func encode(to encoder: any Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(self.insertID, forKey: .insertID)
-        try container.encode(self.time, forKey: .time)
-        try container.encode(self.distinctID, forKey: .distinctID)
-        try self.eventProperties.encode(to: encoder)
+        var container = encoder.container(keyedBy: AnyCodingKey.self)
+        try container.encode(self.insertID, forKey: AnyCodingKey(CodingKeys.insertID.rawValue))
+        try container.encode(self.time, forKey: AnyCodingKey(CodingKeys.time.rawValue))
+        try container.encode(self.distinctID, forKey: AnyCodingKey(CodingKeys.distinctID.rawValue))
+        
+        // FIX: Encode each key-value pair of the dictionary into the CURRENT container
+        // instead of calling self.eventProperties.encode(to: encoder)
+        for (type, property) in eventProperties {
+            // Use the rawValue of the EventType ("$set", "$add", etc.) as the key
+            try container.encode(property, forKey: AnyCodingKey(type.rawValue))
+        }
     }
 
     enum CodingKeys: String, CodingKey {
@@ -132,4 +138,13 @@ struct UserProperty: Encodable {
         case time = "$time"
         case distinctID = "distinct_id"
     }
+}
+
+// Helper to allow dynamic keys in the keyed container
+struct AnyCodingKey: CodingKey {
+    var stringValue: String
+    init(_ string: String) { self.stringValue = string }
+    init?(stringValue: String) { self.init(stringValue) }
+    var intValue: Int? { nil }
+    init?(intValue: Int) { nil }
 }
