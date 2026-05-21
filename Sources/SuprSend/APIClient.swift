@@ -169,7 +169,11 @@ class APIClient {
         request.httpMethod = method.rawValue
         request.allHTTPHeaderFields = headers
         if let body {
-            request.httpBody = try JSONEncoder().encode(body)
+            do {
+                request.httpBody = try JSONEncoder().encode(body)
+            } catch {
+                logger.error("Error while encoding request body: \(error)")
+            }
         }
 
         let (data, response) = try await URLSession.shared.data(for: request)
