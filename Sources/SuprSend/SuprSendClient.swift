@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import UIKit.UIDevice
 
 @objc public protocol SuprSendDeepLinkDelegate: AnyObject {
     func shouldHandleSuprSendDeepLink(_ url: URL) -> Bool
@@ -47,6 +48,9 @@ public class SuprSendClient: NSObject {
     
     /// Preferences instance
     public private(set) lazy var preferences = Preferences(config: self)
+    
+    /// Feeds instance
+    public private(set) lazy var feeds = FeedsFactory(config: self)
 
     public let emitter = Emitter()
     private var userTokenExpirationTimer: Timer?
@@ -349,6 +353,10 @@ public class SuprSendClient: NSObject {
             userTokenExpirationTimer?.invalidate()
             userTokenExpirationTimer = nil
         }
+        
+        if !feeds.feedInstances.isEmpty {
+            feeds.removeAll()
+        }
 
         return .success()
     }
@@ -361,18 +369,17 @@ public class SuprSendClient: NSObject {
 extension SuprSendClient {
     /// Get the SDK version.
     private var sdkVersion: String {
-        (Bundle(for: SuprSendClient.self).infoDictionary as? [String: String])?[
-            "CFBundleShortVersionString"] ?? "2.0.0"
+        "1.0.1"
     }
 
     /// Get the default properties for an event.
     /// - Returns: The default properties.
     private func defaultProperties() -> EventProperty {
         [
-            "$os": "iOS",
-            "$os_version": "17.0",
+            "$os": UIDevice.current.systemName,
+            "$os_version": UIDevice.current.systemVersion,
             "$sdk_type": "iOS Native",
-            "$device_id": "DEVICE_ID",
+            "$device_id": UIDevice.current.identifierForVendor,
             "$sdk_version": sdkVersion,
         ]
     }

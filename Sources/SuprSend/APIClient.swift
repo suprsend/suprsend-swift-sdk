@@ -20,7 +20,9 @@ class APIClient {
     /// - Parameter path: The path to append to the base URL.
     /// - Returns: The full URL, or nil if the base URL is invalid.
     private func getUrl(path: String) -> URL? {
-        if config.host.hasSuffix("/") {
+        if path.hasPrefix("https://") || path.hasPrefix("http://") {
+            URL(string: path)
+        } else if config.host.hasSuffix("/") {
             URL(string: config.host + path)
         } else {
             URL(string: config.host + "/" + path)
