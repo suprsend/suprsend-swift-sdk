@@ -223,6 +223,7 @@ extension User {
                 .iOSPush: token,
                 .deviceID: getDeviceID(),
                 .pushVendor: Constants.pushVendor,
+                .bundleID: Bundle.main.bundleIdentifier ?? "",
             ]
         )
         config.deviceToken = token
