@@ -73,6 +73,9 @@ public class SuprSendClient: NSObject {
     
     /// Preferences instance
     public private(set) lazy var preferences = Preferences(config: self)
+    
+    /// Feeds instance
+    public private(set) lazy var feeds = FeedsFactory(config: self)
 
     public let emitter = Emitter()
     private var userTokenExpirationTimer: Timer?
@@ -389,6 +392,10 @@ public class SuprSendClient: NSObject {
             userTokenExpirationTimer?.invalidate()
             userTokenExpirationTimer = nil
         }
+        
+        if !feeds.feedInstances.isEmpty {
+            feeds.removeAll()
+        }
 
         return .success()
     }
@@ -397,4 +404,3 @@ public class SuprSendClient: NSObject {
         logger.enableLogging()
     }
 }
-

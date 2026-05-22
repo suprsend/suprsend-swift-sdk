@@ -8,6 +8,8 @@
 import Foundation
 
 enum SuprSendConstants {
-    static let publicKey: String = "<YOUR_PUBLIC_KEY>"
-    static let host: String? = nil
+    static let publicKey: String = ""
+    static let host: String? = ""
+    static let socketHost: String? = ""
+    static let inboxHost: String? = ""
 }
