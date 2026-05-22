@@ -241,6 +241,7 @@ extension User {
                 .iOSPush: token,
                 .deviceID: getDeviceID(),
                 .pushVendor: Constants.pushVendor,
+                .bundleID: Bundle.main.bundleIdentifier ?? "",
             ]
         )
         return await triggerUserEvent(event)
