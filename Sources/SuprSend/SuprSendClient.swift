@@ -16,12 +16,28 @@ public let shared = SuprSendClient.shared
 /// Additional configurations
 /// - Parameters:
 ///   - host: Host URL
+///   - appInfo: App name/version to advertise in the user-agent headers. When
+///     `nil`, values are auto-detected from `Bundle.main`.
+///   - clientUserAgent: Per-field override of the user-agent payload. Useful
+///     for wrappers (Flutter/RN) that want to identify themselves.
 public class Options: NSObject {
     /// Host URL
     public let host: String?
-    
-    public init(host: String?) {
+
+    /// App info merged into the user-agent payload.
+    public let appInfo: AppInfo?
+
+    /// Per-field override of the user-agent payload.
+    public let clientUserAgent: ClientUserAgentConfig?
+
+    public init(
+        host: String? = nil,
+        appInfo: AppInfo? = nil,
+        clientUserAgent: ClientUserAgentConfig? = nil
+    ) {
         self.host = host
+        self.appInfo = appInfo
+        self.clientUserAgent = clientUserAgent
     }
 }
 
@@ -38,6 +54,16 @@ public class SuprSendClient: NSObject {
     private(set) var userToken: String?
     private var apiClient: APIClient?
     private(set) var authenticateOptions: AuthenticateOptions?
+
+    /// Fully-resolved user-agent payload sent on every request as JSON in the
+    /// `X-Suprsend-Client-User-Agent` header.
+    private(set) var clientUserAgent: ClientUserAgentConfig
+    /// Compact string form sent on every request in the `X-Suprsend-User-Agent`
+    /// header.
+    private(set) var userAgent: String
+    /// Pre-encoded JSON form of ``clientUserAgent`` so `APIClient` doesn't
+    /// re-encode on every request.
+    private(set) var clientUserAgentJSON: String
 
     /// User instance
     public private(set) lazy var user = User(config: self)
@@ -63,6 +89,13 @@ public class SuprSendClient: NSObject {
     ) {
         self.publicKey = publicKey
         self.host = options?.host ?? Constants.defaultHost
+        let resolvedUA = buildClientUserAgent(
+            appInfo: options?.appInfo,
+            override: options?.clientUserAgent
+        )
+        self.clientUserAgent = resolvedUA
+        self.userAgent = buildUserAgent(resolvedUA)
+        self.clientUserAgentJSON = encodeClientUserAgent(resolvedUA)
     }
 
     @objc public func configure(publicKey: String,
@@ -72,6 +105,13 @@ public class SuprSendClient: NSObject {
         self.host = options?.host ?? Constants.defaultHost
         self.urlDelegate = urlDelegate
         self.push.delegate = urlDelegate as? SuprSendPushNotificationDelegate
+        let resolvedUA = buildClientUserAgent(
+            appInfo: options?.appInfo,
+            override: options?.clientUserAgent
+        )
+        self.clientUserAgent = resolvedUA
+        self.userAgent = buildUserAgent(resolvedUA)
+        self.clientUserAgentJSON = encodeClientUserAgent(resolvedUA)
     }
     
     @objc public func setDeepLinkDelegate(_ urlDelegate: SuprSendDeepLinkDelegate) {
@@ -234,12 +274,12 @@ public class SuprSendClient: NSObject {
             insertID: UUID().uuidString,
             time: Date().timeIntervalSince1970,
             distinctID: distinctID ?? String(),
-            properties: allProperties(merging: validatedProperties).convertToProperty()
+            properties: validatedProperties.convertToProperty()
         )
 
         return await eventApi(payload: .init(event))
     }
-    
+
     func trackPublic(event: String, properties: EventProperty?) async -> APIResponse {
         let validatedProperties: EventProperty
         if let properties {
@@ -247,13 +287,13 @@ public class SuprSendClient: NSObject {
         } else {
             validatedProperties = .init()
         }
-        
+
         let event = Event(
             event: event,
             insertID: UUID().uuidString,
             time: Date().timeIntervalSince1970,
             distinctID: distinctID ?? String(),
-            properties: allProperties(merging: validatedProperties).convertToProperty()
+            properties: validatedProperties.convertToProperty()
         )
         let response: APIResponse = await publicClient().publicRequest(reqData: .init(path: "v2/event", payload: .init(event), type: .post))
         return response
@@ -358,36 +398,3 @@ public class SuprSendClient: NSObject {
     }
 }
 
-extension SuprSendClient {
-    /// Get the SDK version.
-    private var sdkVersion: String {
-        (Bundle(for: SuprSendClient.self).infoDictionary as? [String: String])?[
-            "CFBundleShortVersionString"] ?? "2.0.0"
-    }
-
-    /// Get the default properties for an event.
-    /// - Returns: The default properties.
-    private func defaultProperties() -> EventProperty {
-        [
-            "$os": "iOS",
-            "$os_version": "17.0",
-            "$sdk_type": "iOS Native",
-            "$device_id": "DEVICE_ID",
-            "$sdk_version": sdkVersion,
-        ]
-    }
-
-    /// Get the all properties for an event, merging with default properties.
-    /// - Parameters:
-    ///   - userProperties: The user-provided properties.
-    /// - Returns: The merged properties.
-    private func allProperties(merging userProperties: EventProperty?) -> EventProperty {
-        if let userProperties {
-            defaultProperties().merging(userProperties) { value1, _ in
-                value1
-            }
-        } else {
-            defaultProperties()
-        }
-    }
-}

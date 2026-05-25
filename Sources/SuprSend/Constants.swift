@@ -32,6 +32,19 @@ enum Constants {
     /// The header key for application/json.
     static let headerApplicationJSON = "application/json"
 
+    /// The header key for the JSON-encoded client user-agent payload.
+    static let headerXClientUserAgent = "X-Suprsend-Client-User-Agent"
+
+    /// The header key for the compact user-agent string.
+    static let headerXUserAgent = "X-Suprsend-User-Agent"
+
+    /// SDK name advertised in the user-agent payload.
+    static let sdkName = "suprsend-swift-sdk"
+
+    /// SDK version advertised in the user-agent payload. Keep in lockstep with
+    /// `SuprSendSwift.podspec`'s `spec.version` at release time.
+    static let sdkVersion = "1.1.0"
+
     /// The expiry key for JWT tokens.
     static let expiryKeyJWT = "exp"
 

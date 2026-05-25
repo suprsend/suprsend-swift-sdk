@@ -33,6 +33,8 @@ class APIClient {
         var headers = [
             Constants.headerContentType: Constants.headerApplicationJSON,
             Constants.headerAuthorization: config.publicKey,
+            Constants.headerXClientUserAgent: config.clientUserAgentJSON,
+            Constants.headerXUserAgent: config.userAgent,
         ]
 
         if let token = config.userToken {

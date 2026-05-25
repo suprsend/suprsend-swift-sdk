@@ -72,6 +72,8 @@ enum ChannelType: String, Encodable, CodingKeyRepresentable {
     case pushVendor = "$pushvendor"
     /// Device ID channel.
     case deviceID = "$device_id"
+    /// App bundle identifier.
+    case bundleID = "$bundle_id"
     /// Email channel.
     case email = "$email"
     /// SMS channel.
