@@ -16,30 +16,41 @@ class SocketClient: NSObject, ObservableObject {
         let event: EventType
         let data: [String: AnyDecodable]?
         
-        enum EventType: String, Codable {
-            case notificationUpdate = "notification_update"
-            case newNotification = "new_notification"
-            case resetBadge = "reset_badge"
-            case bulkNotificationUpdate = "bulk_notification_update"
+        /// Server-emitted socket events. `.unknown(String)` captures any event
+        /// the SDK doesn't yet model (e.g. `joined_room`) so they don't break
+        /// frame decoding; consumers can choose to ignore them. Mirrors the
+        /// "silently no-op for unhandled events" behavior of the web SDK's
+        /// mitt-based emitter.
+        enum EventType: Equatable {
+            case notificationUpdate
+            case newNotification
+            case resetBadge
+            case bulkNotificationUpdate
+            case unknown(String)
+
+            init(rawValue: String) {
+                switch rawValue {
+                case "notification_update": self = .notificationUpdate
+                case "new_notification": self = .newNotification
+                case "reset_badge": self = .resetBadge
+                case "bulk_notification_update": self = .bulkNotificationUpdate
+                default: self = .unknown(rawValue)
+                }
+            }
         }
-        
+
         init(from decoder: any Decoder) throws {
             let container = try decoder.singleValueContainer()
             let parts = try container.decode([AnyDecodable].self)
-            
+
             guard !parts.isEmpty else {
                 throw DecodingError.dataCorruptedError(in: container, debugDescription: "Empty Data")
             }
-            
+
             if case .some(.string(let string)) = parts.first,
                 !string.isEmpty {
-                guard let event = EventType(rawValue: string) else {
-                    throw DecodingError
-                        .dataCorruptedError(in: container, debugDescription: "Unknown Event Type: \(string)")
-                }
-                
-                self.event = event
-                
+                self.event = EventType(rawValue: string)
+
                 if parts.count == 2,
                    case .some(.object(let dictionary)) = parts.last {
                     self.data = dictionary
@@ -77,6 +88,10 @@ class SocketClient: NSObject, ObservableObject {
     
     @Published var connectionStatus: ConnectionStatus = .disconnected
     let receivedMessage: PassthroughSubject<SocketMessage, Never> = .init()
+    /// Fires whenever a connection is lost or closed unexpectedly, before a
+    /// reconnect is scheduled. Lets Feed refresh auth headers if the cause was
+    /// JWT expiry, so the upcoming reconnect uses a fresh token.
+    let connectionLost: PassthroughSubject<Void, Never> = .init()
     @Published var error: String?
     
     enum ConnectionStatus {
@@ -106,34 +121,56 @@ class SocketClient: NSObject, ObservableObject {
     
     // Connect to WebSocket
     func connect() {
-        guard let url = URL(string: serverURL) else {
+        guard let url = socketIOURL(from: serverURL) else {
             logger.error("Invalid URL: \(serverURL)")
             return
         }
-        
+
         guard connectionStatus != .connected && connectionStatus != .connecting else {
             logger.info("Already connected or connecting")
             return
         }
-        
+
         userInitiatedDisconnect = false
         connectionStatus = .connecting
-        
-        var request = URLRequest(url: url)
-        
-        // Add auth headers
-        for (key, value) in headers {
-            request.setValue(value, forHTTPHeaderField: key)
-        }
-        
-        
+
+        let request = URLRequest(url: url)
+
         webSocketTask = urlSession?.webSocketTask(with: request)
         webSocketTask?.resume()
-        
+
         // Start listening for messages
         listen()
     }
+
+    /// Builds the socket.io v4 websocket-transport handshake URL on top of the
+    /// configured base host. The Suprsend feed server speaks engine.io/socket.io
+    /// v4, so a bare `wss://host/` connection fails the upgrade — we must hit
+    /// `/socket.io/?EIO=4&transport=websocket`. Auth is sent over the wire in
+    /// the `40` CONNECT packet (see `sendAuthMessage`), not as HTTP headers.
+    private func socketIOURL(from base: String) -> URL? {
+        guard var components = URLComponents(string: base) else { return nil }
+        var path = components.path
+        while path.hasSuffix("/") { path.removeLast() }
+        components.path = path + "/socket.io/"
+        var query = components.queryItems ?? []
+        if !query.contains(where: { $0.name == "EIO" }) {
+            query.append(URLQueryItem(name: "EIO", value: "4"))
+        }
+        if !query.contains(where: { $0.name == "transport" }) {
+            query.append(URLQueryItem(name: "transport", value: "websocket"))
+        }
+        components.queryItems = query
+        return components.url
+    }
     
+    /// Replaces the auth headers used on subsequent reconnect attempts.
+    /// Caller should typically invoke this in response to `connectionLost`
+    /// after refreshing an expired user token.
+    func updateHeaders(_ headers: [String: String]) {
+        self.headers = headers
+    }
+
     // Disconnect from WebSocket
     func disconnect() {
         userInitiatedDisconnect = true
@@ -255,20 +292,17 @@ class SocketClient: NSObject, ObservableObject {
     
     
     private func handleTextMessage(_ text: String) {
-        // Handle pong or other keep-alive messages
+        logger.info("[SuprSendSocket] RX: \(text)")
         if text.starts(with: "3"){
             lastPongReceived = Date()
-            logger.info("🏓 Pong received")
         } else if text.starts(with: "0") {
             sendAuthMessage()
         } else if text.starts(with: "2") {
             lastPongReceived = Date()
-            logger.info("🏓 Ping received")
             sendMessage("3")
         } else if text.starts(with: "42") {
             let message = text.suffix(from: text.index(text.startIndex, offsetBy: 2))
             parseSocketMessage(jsonString: String(message))
-            logger.info("📨 Received: \(text)")
         }
     }
     
@@ -338,11 +372,12 @@ class SocketClient: NSObject, ObservableObject {
         if connectionStatus == .connected || connectionStatus == .connecting {
             return
         }
-        
+
         logger.error("🔌 Connection lost - attempting reconnection")
         connectionStatus = .disconnected
         stopKeepAlive()
-        
+
+        connectionLost.send(())
         scheduleReconnection()
     }
     
@@ -386,9 +421,10 @@ extension SocketClient: URLSessionWebSocketDelegate {
         
         connectionStatus = .disconnected
         stopKeepAlive()
-        
+
         // Auto-reconnect unless explicitly closed
         if closeCode != .goingAway {
+            connectionLost.send(())
             scheduleReconnection()
         }
     }

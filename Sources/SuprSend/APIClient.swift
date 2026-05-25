@@ -140,7 +140,7 @@ class APIClient {
         do {
             return try await requestApiInstance(reqData: reqData)
         } catch {
-            logger.error("Error while calling API: \(error)")
+            logger.error("SuprSend: \(reqData.type.rawValue) \(reqData.path) error: \(error.localizedDescription)")
             return .error(
                 .init(type: .network, message: error.localizedDescription), statusCode: 500)
         }
@@ -150,7 +150,7 @@ class APIClient {
         do {
             return try await requestApiInstance(reqData: reqData)
         } catch {
-            logger.error("Error while calling API: \(error)")
+            logger.error("SuprSend: \(reqData.type.rawValue) \(reqData.path) error: \(error.localizedDescription)")
             return .error(
                 .init(type: .network, message: error.localizedDescription), statusCode: 500)
         }
@@ -177,28 +177,29 @@ class APIClient {
         }
 
         let (data, response) = try await URLSession.shared.data(for: request)
-        
+
         let httpResponse = response as? HTTPURLResponse
-        
+        let methodString = method.rawValue
+        let urlString = url.absoluteString
+
         do {
             let result = try JSONDecoder().decode(R.self, from: data)
             if let httpResponse {
                 if data.isEmpty {
-                    logger.error("SuprSend: \(httpResponse.statusCode) \(result.status.rawValue)")
+                    logger.error("SuprSend: \(methodString) \(urlString) \(httpResponse.statusCode) \(result.status.rawValue)")
                 } else {
-                    logger.info(
-                        "SuprSend: \(httpResponse.statusCode) \(String(data: data, encoding: .utf8)!)")
+                    logger.info("SuprSend: \(methodString) \(urlString) \(httpResponse.statusCode)")
                 }
             }
             if let message = result.error?.message {
-                logger.error("\(message)")
+                logger.error("SuprSend: \(methodString) \(urlString) \(httpResponse?.statusCode ?? 0) \(message)")
             }
-            
+
             return result
         } catch {
-            logger.error("SuprSend: \(httpResponse?.statusCode ?? 0) \(String(data: data, encoding: .utf8) ?? "")")
+            logger.error("SuprSend: \(methodString) \(urlString) \(httpResponse?.statusCode ?? 0) \(String(data: data, encoding: .utf8) ?? "") error: \(error.localizedDescription)")
         }
-        
+
         return .error(.init(type: .unknown, message: nil), statusCode: httpResponse?.statusCode)
     }
 }

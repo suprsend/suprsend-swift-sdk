@@ -13,6 +13,8 @@ private enum FeedConstants {
     static let tenantId = "default"
     static let maxPageSize: UInt = 100
     static let store = IStore(storeId: "$suprsend_default_store", label: "")
+    static let defaultApiHost = "https://inboxs.live"
+    static let defaultSocketHost = "https://betainbox.suprsend.com"
 }
 
 /// A class responsible for handling inbox feed.
@@ -29,8 +31,13 @@ public class Feed {
     private var expiryTimerId: Timer?
     
     public var emitter: PassthroughSubject<InboxEmitterEvents, Never> = .init()
-    
+
     private var cancellables = Set<AnyCancellable>()
+
+    /// Monotonic counter bumped whenever in-flight fetches should be considered
+    /// stale (e.g. on store switch). Fetch checks this after each `await` and
+    /// bails if it changed.
+    private var fetchGeneration = 0
     
     public var data: IFeedData {
         let storeData = store.value
@@ -84,9 +91,13 @@ public class Feed {
     }
     
     func reset() {
+        resetState(to: feedOptions.stores?.first ?? FeedConstants.store)
+    }
+
+    private func resetState(to activeStore: IStore) {
         store.send(.init(
             notifications: [],
-            store: feedOptions.stores?.first ?? FeedConstants.store,
+            store: activeStore,
             pageInfo: .init(
                 total: .zero,
                 hasMore: false,
@@ -97,7 +108,7 @@ public class Feed {
             isFirstFetch: true
         ))
         emitter.send(.storeUpdate(self.data))
-        
+
         if (expiryTimerId != nil) {
             expiryTimerId?.invalidate()
             expiryTimerId = nil
@@ -185,21 +196,25 @@ extension Feed {
         return response
     }
     
-    // TODO: support other stores and pages
     public func fetch(options: IInboxFetchOptions? = nil) async -> FeedAPIResponse {
         var storeData = store.value
-        
+
         if requestInprogress {
             return .error(.init(type: .validation, message: "Already fetching data"))
         }
-        
+
+        let generation = fetchGeneration
+
         let pageSize = options?.pageSize ?? feedOptions.pageSize
-        
+
         if (!storeData.isFirstFetch) {
             store.send(storeData.with(apiStatus: .fetchingMore))
         } else {
             store.send(storeData.with(apiStatus: .loading))
             await fetchCount()
+            if generation != fetchGeneration {
+                return .error(.init(type: .validation, message: "Fetch cancelled"))
+            }
         }
         storeData = store.value
         emitter.send(.storeUpdate(self.data))
@@ -231,13 +246,17 @@ extension Feed {
         let response: FeedAPIResponse = await config.client().request(
             reqData: .init(path: url, payload: nil, type: .get)
         )
-        
+
+        if generation != fetchGeneration {
+            return .error(.init(type: .validation, message: "Fetch cancelled"))
+        }
+
         if (response.status == .error) {
             store.send(store.value.with(apiStatus: .error))
             emitter.send(.storeUpdate(self.data))
             return response
         }
-        
+
         var notifications = storeData.notifications
         let results = response.body?.results ?? []
         if storeData.isFirstFetch {
@@ -272,17 +291,36 @@ extension Feed {
         return response
     }
     
-    // TODO: support other stores
     public func fetchNextPage() async -> FeedAPIResponse {
         let storeData = store.value
-        
+
         guard storeData.pageInfo.hasMore == true else {
             return .error(ResponseError(type: .validation, message: "No more pages to fetch"))
         }
-        
+
         return await fetch()
     }
-    
+
+    /// Switches the active store for this feed. Any in-flight `fetch()` is
+    /// invalidated so its result won't paint into the new store's view, then
+    /// state is reset and the first page (plus badge count) is refetched.
+    /// Returns a validation error if `storeId` doesn't match any configured store.
+    @discardableResult
+    public func changeActiveStore(storeId: String) async -> FeedAPIResponse {
+        guard let newStore = feedOptions.stores?.first(where: { $0.storeId == storeId }) else {
+            return .error(.init(type: .validation, message: "No store configured with storeId: \(storeId)"))
+        }
+
+        if newStore.storeId == store.value.store.storeId {
+            return .success()
+        }
+
+        fetchGeneration &+= 1
+        resetState(to: newStore)
+
+        return await fetch()
+    }
+
     public func fetchDetails(notificationId: String) async -> FeedDetailAPIResponse {
         let url = getUrl(path: "notifications/\(notificationId)", qp: [
             "tenant_id": feedOptions.tenantId,
@@ -413,10 +451,10 @@ extension Feed {
             )
     }
     
-    // TODO: improve logic for already interacted cases
     public func markAsInteracted(notificationId: String) async -> APIResponse {
         let storeData = store.value
-        
+        var alreadyUpdated = false
+
         store.send(storeData.with(
             notifications: storeData.notifications.map({ notification in
                 var newNotification = notification
@@ -424,6 +462,8 @@ extension Feed {
                     if (notification.interacted_on == nil) {
                         newNotification = newNotification
                             .with(interacted_on: Date.now.timeIntervalSince1970)
+                    } else {
+                        alreadyUpdated = true
                     }
                     if (notification.read_on == nil) {
                         newNotification = newNotification
@@ -433,14 +473,18 @@ extension Feed {
                 return newNotification
             })
         ))
-        
+
+        if (alreadyUpdated) {
+            return .success()
+        }
+
         let url = getUrl(path: "notifications/\(notificationId)/interacted", qp: [
             "tenant_id": feedOptions.tenantId,
             "distinct_id": config.distinctID,
         ])
-        
+
         emitter.send(.storeUpdate(self.data))
-        
+
         return await config
             .client()
             .request(
@@ -667,7 +711,10 @@ extension Feed {
     }
     
     private func getUrl(path: String, qp: [String: Encodable?]) -> String {
-        let host = feedOptions.host?.apiHost ?? ""
+        var host = feedOptions.host?.apiHost ?? FeedConstants.defaultApiHost
+        while host.hasSuffix("/") {
+            host.removeLast()
+        }
         let urlPath = "\(host)/v1/feed/\(path)"
         let validatedQueryParams = validateQueryParams(qp)
         let queryParams = validatedQueryParams.map { URLQueryItem(name: $0.key, value: $0.value) }
@@ -770,29 +817,33 @@ extension Feed {
         guard socket == nil else {
             return
         }
-        
-        guard let host = feedOptions.host?.socketHost else {
-            return
+
+        var host = feedOptions.host?.socketHost ?? FeedConstants.defaultSocketHost
+        while host.hasSuffix("/") {
+            host.removeLast()
         }
-        
+
+        socket = SocketClient(serverURL: host, headers: socketHeaders())
+        socket?.connect()
+
+        initializeSocketEvents()
+    }
+
+    private func socketHeaders() -> [String: String] {
         var headers: [String: String] = [:]
         headers["authorization"] = config.publicKey
         headers["x-ss-signature"] = config.userToken
         headers["distinct_id"] = config.distinctID
         headers["tenant_id"] = feedOptions.tenantId
         headers["schema"] = "1"
-        
-        socket = SocketClient(serverURL: host, headers: headers)
-        socket?.connect()
-        
-        initializeSocketEvents()
+        return headers
     }
     
     private func initializeSocketEvents() {
         socket?.receivedMessage
             .receive(on: DispatchQueue.main)
             .sink { [weak self] message in
-                
+
                 switch message.event {
                 case .newNotification:
                     Task {
@@ -814,13 +865,55 @@ extension Feed {
                     }
                 case .resetBadge:
                     self?.handleResetBadge()
-                default:
+                case .unknown:
                     break
                 }
             }
             .store(in: &cancellables)
+
+        socket?.connectionLost
+            .sink { [weak self] in
+                Task { await self?.handleSocketConnectionLost() }
+            }
+            .store(in: &cancellables)
     }
-    
+
+    /// Refreshes the user token if it has expired and pushes the new auth
+    /// headers into `SocketClient` so the next scheduled reconnect uses fresh
+    /// credentials. No-op if the token is still valid or no refresh callback
+    /// is configured.
+    private func handleSocketConnectionLost() async {
+        guard let userToken = config.userToken,
+              let refreshUserToken = config.authenticateOptions?.refreshUserToken else {
+            return
+        }
+
+        let jwtPayload = try? Utils.shared.decode(jwtToken: userToken)
+        let expiresOn = jwtPayload?[Constants.expiryKeyJWT] as? Double ?? .zero
+        let hasExpired = expiresOn <= Date.now.timeIntervalSince1970
+
+        guard hasExpired else { return }
+
+        let newToken: String?
+        do {
+            newToken = try await refreshUserToken(userToken, jwtPayload ?? .init())
+        } catch {
+            logger.warning("[SuprSend]: Couldn't refresh userToken for socket reconnect")
+            return
+        }
+
+        guard let newToken,
+              let distinctID = config.distinctID else { return }
+
+        _ = await config.identify(
+            distinctID: distinctID,
+            userToken: newToken,
+            options: config.authenticateOptions
+        )
+
+        socket?.updateHeaders(socketHeaders())
+    }
+
     private func handleResetBadge() {
         let storeData = store.value
         var meta = storeData.meta
