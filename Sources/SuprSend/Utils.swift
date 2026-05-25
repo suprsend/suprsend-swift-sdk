@@ -87,7 +87,6 @@ final class Utils: Sendable {
     {
         var validatedData = EventProperty()
         let allowReservedKeys = options?.allowReservedKeys ?? false
-        let valueType = options?.valueType
 
         for (key, value) in data {
             if !allowReservedKeys && isReservedKey(key) {
