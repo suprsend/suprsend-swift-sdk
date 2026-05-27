@@ -20,7 +20,7 @@ public struct FeedDetailAPIResponse: Response {
     /// An error message if any (optional)
     public let error: ResponseError?
     
-    /// Initializes a `PreferenceAPIResponse` instance
+    /// Initializes a `FeedDetailAPIResponse` instance
     ///
     /// - Parameters:
     ///   - status: The status of the API response.

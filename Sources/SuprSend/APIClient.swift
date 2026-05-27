@@ -183,19 +183,26 @@ class APIClient {
         let urlString = url.absoluteString
 
         do {
-            let result = try JSONDecoder().decode(R.self, from: data)
+            let decoded = try JSONDecoder().decode(R.self, from: data)
             if let httpResponse {
                 if data.isEmpty {
-                    logger.error("SuprSend: \(methodString) \(urlString) \(httpResponse.statusCode) \(result.status.rawValue)")
+                    logger.error("SuprSend: \(methodString) \(urlString) \(httpResponse.statusCode) \(decoded.status.rawValue)")
                 } else {
                     logger.info("SuprSend: \(methodString) \(urlString) \(httpResponse.statusCode)")
                 }
             }
-            if let message = result.error?.message {
+            if let message = decoded.error?.message {
                 logger.error("SuprSend: \(methodString) \(urlString) \(httpResponse?.statusCode ?? 0) \(message)")
             }
 
-            return result
+            // Server doesn't echo HTTP status into the JSON body — populate
+            // statusCode from the actual HTTP response so callers can see it.
+            return R.init(
+                status: decoded.status,
+                statusCode: httpResponse?.statusCode,
+                body: decoded.body,
+                error: decoded.error
+            )
         } catch {
             logger.error("SuprSend: \(methodString) \(urlString) \(httpResponse?.statusCode ?? 0) \(String(data: data, encoding: .utf8) ?? "") error: \(error.localizedDescription)")
         }

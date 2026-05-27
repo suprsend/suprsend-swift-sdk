@@ -20,7 +20,7 @@ public struct FeedAPIResponse: Response {
     /// An error message if any (optional)
     public let error: ResponseError?
     
-    /// Initializes a `PreferenceAPIResponse` instance
+    /// Initializes a `FeedAPIResponse` instance
     ///
     /// - Parameters:
     ///   - status: The status of the API response.
@@ -224,11 +224,11 @@ public class IRemoteNotification: NSObject, Codable {
     }
 }
 
-public class IPageInfo: NSObject, Codable {
+public class IPageInfo: NSObject {
     public let total: UInt
     public let hasMore: Bool
     public let pageSize: UInt
-    
+
     init(total: UInt, hasMore: Bool, pageSize: UInt) {
         self.total = total
         self.hasMore = hasMore

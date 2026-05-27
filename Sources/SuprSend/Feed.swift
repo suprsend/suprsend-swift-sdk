@@ -28,7 +28,7 @@ public class Feed {
     
     private var socket: SocketClient?
     
-    private var expiryTimerId: Timer?
+    private var expiryTimerTask: Task<Void, Never>?
     
     public var emitter: PassthroughSubject<InboxEmitterEvents, Never> = .init()
 
@@ -94,7 +94,8 @@ public class Feed {
         resetState(to: feedOptions.stores?.first ?? FeedConstants.store)
     }
 
-    private func resetState(to activeStore: IStore) {
+    private func resetState(to activeStore: IStore, preservesMeta: Bool = false) {
+        let meta: [String: String] = preservesMeta ? store.value.meta : ["badge": "0"]
         store.send(.init(
             notifications: [],
             store: activeStore,
@@ -103,16 +104,14 @@ public class Feed {
                 hasMore: false,
                 pageSize: FeedConstants.pageSize
             ),
-            meta: ["badge": "0"],
+            meta: meta,
             apiStatus: .initial,
             isFirstFetch: true
         ))
         emitter.send(.storeUpdate(self.data))
 
-        if (expiryTimerId != nil) {
-            expiryTimerId?.invalidate()
-            expiryTimerId = nil
-        }
+        expiryTimerTask?.cancel()
+        expiryTimerTask = nil
     }
     
     func remove() {
@@ -180,18 +179,21 @@ extension Feed {
             ? storesQueryParamObj(feedOptions.stores)
             : nil,
         ]
-        
+
         let url = getUrl(path: "notifications_count", qp: queryParams)
-        
+
         let response: FeedCountAPIResponse = await config.client().request(
             reqData: .init(path: url, payload: nil, type: .get)
         )
-        
+
         if (response.status == .success) {
-            let meta = ["badge": "\(response.body?.badge ?? 0)"]
+            var meta: [String: String] = ["badge": "\(response.body?.badge ?? 0)"]
+            for (storeId, count) in response.body?.storeCounts ?? [:] {
+                meta[storeId] = "\(count)"
+            }
             store.send(store.value.with(meta: meta))
         }
-        
+
         emitter.send(.storeUpdate(self.data))
         return response
     }
@@ -211,9 +213,11 @@ extension Feed {
             store.send(storeData.with(apiStatus: .fetchingMore))
         } else {
             store.send(storeData.with(apiStatus: .loading))
-            await fetchCount()
-            if generation != fetchGeneration {
-                return .error(.init(type: .validation, message: "Fetch cancelled"))
+            // Fire badge-count refresh in parallel with the first-page request,
+            // mirroring the web SDK which doesn't await it. fetchCount updates
+            // the store independently when it resolves.
+            Task { [weak self] in
+                _ = await self?.fetchCount()
             }
         }
         storeData = store.value
@@ -265,9 +269,16 @@ extension Feed {
             notifications.append(contentsOf: results)
         }
         
-        let hasMore = (response.body?.meta?.current_page ?? 0) < (response.body?.meta?.total_pages ?? 0)
+        let totalCount = response.body?.meta?.total_count ?? 0
+        let hasMore: Bool
+        if let currentPage = response.body?.meta?.current_page,
+           let totalPages = response.body?.meta?.total_pages {
+            hasMore = currentPage < totalPages
+        } else {
+            hasMore = UInt(notifications.count) < totalCount
+        }
         let pageInfo = IPageInfo.init(
-            total: response.body?.meta?.total_count ?? 0,
+            total: totalCount,
             hasMore: hasMore,
             pageSize: storeData.pageInfo.pageSize
         )
@@ -316,7 +327,7 @@ extension Feed {
         }
 
         fetchGeneration &+= 1
-        resetState(to: newStore)
+        resetState(to: newStore, preservesMeta: true)
 
         return await fetch()
     }
@@ -376,13 +387,17 @@ extension Feed {
     public func markAsRead(notificationId: String) async -> APIResponse {
         let storeData = store.value
         var alreadyUpdated = false
-        
+
         store.send(storeData.with(
             notifications: storeData.notifications.map({ notification in
                 if (notification.n_id == notificationId) {
                     if (notification.read_on == nil) {
-                        return notification
-                            .with(read_on: Date.now.timeIntervalSince1970)
+                        let now = Date.now.timeIntervalSince1970
+                        var updated = notification.with(read_on: now)
+                        if (notification.seen_on == nil) {
+                            updated = updated.with(seen_on: now)
+                        }
+                        return updated
                     } else {
                         alreadyUpdated = true
                     }
@@ -630,21 +645,36 @@ extension Feed {
 // MARK: - Expiry Timer
 extension Feed {
     private func startExpiryTimer() {
-        if (expiryTimerId != nil) {
+        
+        if (expiryTimerTask != nil) {
             return
         }
-        expiryTimerId =
-            .scheduledTimer(timeInterval: 30, target: self, selector: #selector(removeExpiredFeed), userInfo: nil, repeats: true)
+        // Use Task.sleep rather than Timer.scheduledTimer because `fetch()` is
+        // async and frequently resumes on a cooperative-pool thread whose run
+        // loop isn't running, which would silently prevent the Timer from
+        // firing. Mirrors the keep-alive pattern in SocketClient.
+        expiryTimerTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 30_000_000_000)
+                guard !Task.isCancelled else { break }
+                await MainActor.run {
+                    self?.removeExpiredFeed()
+                }
+            }
+        }
     }
-    
-    @objc private func removeExpiredFeed() {
+
+    private func removeExpiredFeed() {
         let storeData = store.value
         var hasExpired = false
-        
+
         let notifications = storeData.notifications.filter(
             { (notification: IRemoteNotification) in
+                // `expiry` is delivered by the backend in milliseconds since
+                // epoch (consistent with `created_on`), so convert to seconds
+                // before comparing with `Date.now`.
                 let expired = notification.expiry != nil
-                ? Date.now > Date(timeIntervalSince1970: notification.expiry!)
+                ? Date.now > Date(timeIntervalSince1970: notification.expiry! / 1000)
                 : false
                 if (expired) {
                     hasExpired = true
@@ -657,9 +687,10 @@ extension Feed {
         
         if (hasExpired) {
             store.send(store.value.with(notifications: notifications))
-            Task {
-                await fetchCount()
-                emitter.send(.storeUpdate(self.data))
+            Task { [weak self] in
+                guard let self else { return }
+                await self.fetchCount()
+                self.emitter.send(.storeUpdate(self.data))
             }
         }
     }
@@ -668,25 +699,41 @@ extension Feed {
 // MARK: - URL & Query Params
 extension Feed {
     
-    private func storeQueryParamObj(_ store: IStore) -> IStore {
-        .init(
+    private struct StoreQueryParam: Encodable {
+        let storeId: String
+        let query: Query
+
+        struct Query: Encodable {
+            let read: Bool?
+            let archived: Bool?
+            let tags: OrFilter
+            let categories: OrFilter
+        }
+
+        struct OrFilter: Encodable {
+            let or: [String]
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case storeId = "store_id"
+            case query
+        }
+    }
+
+    private func storeQueryParamObj(_ store: IStore) -> StoreQueryParam {
+        StoreQueryParam(
             storeId: store.storeId,
-            label: store.label,
             query: .init(
-                tags: store.query?.tags ?? [],
-                categories: store.query?.categories ?? [],
                 read: store.query?.read,
-                archived: store.query?.archived
+                archived: store.query?.archived,
+                tags: .init(or: store.query?.tags ?? []),
+                categories: .init(or: store.query?.categories ?? [])
             )
         )
     }
-    
-    private func storesQueryParamObj(_ stores: [IStore]?) -> [IStore]? {
-        let apiStores = stores?.map({ store in
-            return storeQueryParamObj(store)
-        })
-        
-        return apiStores
+
+    private func storesQueryParamObj(_ stores: [IStore]?) -> [StoreQueryParam]? {
+        stores?.map { storeQueryParamObj($0) }
     }
     
     private func validateQueryParams(_ queryParams: [String: Encodable?]) -> [String: String] {
@@ -846,19 +893,19 @@ extension Feed {
 
                 switch message.event {
                 case .newNotification:
-                    Task {
+                    Task { [weak self] in
                         await self?.handleNewNotificationSocketEvent(
                             data: message.data
                         )
                     }
                 case .notificationUpdate:
-                    Task {
+                    Task { [weak self] in
                         await self?.handleNotificationUpdateSocketEvent(
                             data: message.data
                         )
                     }
                 case .bulkNotificationUpdate:
-                    Task {
+                    Task { [weak self] in
                         await self?.handleBulkNotificationUpdateSocketEvent(
                             data: message.data
                         )
@@ -873,7 +920,7 @@ extension Feed {
 
         socket?.connectionLost
             .sink { [weak self] in
-                Task { await self?.handleSocketConnectionLost() }
+                Task { [weak self] in await self?.handleSocketConnectionLost() }
             }
             .store(in: &cancellables)
     }
@@ -955,7 +1002,7 @@ extension Feed {
             )
         }
         
-        feedOptions.stores?.map { store in
+        feedOptions.stores?.forEach { store in
             if (notificationBelongToStore(notification: newNotificationData, store: store)) {
                 emitNewNotificationEvent = true
                 newMetaData[store.storeId] = String((Int(storeData.meta[store.storeId] ?? "0") ?? 0) + 1)
@@ -1049,7 +1096,9 @@ extension Feed {
            case let .string(ids) = notificationIds,
             ids == "all" {
             var meta = storeData.meta
-            meta["badge"] = "0"
+            for key in meta.keys {
+                meta[key] = "0"
+            }
             
             let notifications = storeData.notifications.map { notification in
                 if (notification.read_on == nil) {

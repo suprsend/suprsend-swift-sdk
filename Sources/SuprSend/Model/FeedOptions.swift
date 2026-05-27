@@ -39,7 +39,7 @@ public class IStoreQuery: NSObject, Codable {
     public let read: Bool?
     public let archived: Bool?
     
-    init(tags: [String]?, categories: [String]?, read: Bool?, archived: Bool?) {
+    public init(tags: [String]? = nil, categories: [String]? = nil, read: Bool? = nil, archived: Bool? = nil) {
         self.tags = tags
         self.categories = categories
         self.read = read
@@ -49,12 +49,18 @@ public class IStoreQuery: NSObject, Codable {
 
 public class IStore: NSObject, Codable {
     public let storeId: String
-    
+
     public let label: String
-    
+
     public let query: IStoreQuery?
-    
-    init(storeId: String, label: String, query: IStoreQuery? = nil) {
+
+    enum CodingKeys: String, CodingKey {
+        case storeId = "store_id"
+        case label
+        case query
+    }
+
+    public init(storeId: String, label: String, query: IStoreQuery? = nil) {
         self.storeId = storeId
         self.label = label
         self.query = query

@@ -51,8 +51,11 @@ class SocketClient: NSObject, ObservableObject {
                 !string.isEmpty {
                 self.event = EventType(rawValue: string)
 
-                if parts.count == 2,
-                   case .some(.object(let dictionary)) = parts.last {
+                // socket.io frames may carry trailing metadata (e.g. a Redis
+                // stream ID) after the payload, so accept any frame with >=2
+                // elements and read the payload at index 1.
+                if parts.count >= 2,
+                   case .object(let dictionary) = parts[1] {
                     self.data = dictionary
                 } else {
                     self.data = nil
@@ -66,16 +69,24 @@ class SocketClient: NSObject, ObservableObject {
     
     private var webSocketTask: URLSessionWebSocketTask?
     private var urlSession: URLSession?
-    
+
     // Keep-alive configuration
-    private var pingTask: Task<Void, Never>?
     private var heartbeatTask: Task<Void, Never>?
-    private var reconnectionTimer: Timer?
-    
-    private let pingInterval: UInt64 = 25_000_000_000
-    private let heartbeatTimeout: UInt64 = 20_000_000_000
-    private let reconnectInterval: TimeInterval = 5.0
-    
+    private var reconnectionTask: Task<Void, Never>?
+
+    // Engine.IO v4 is server-driven: the server sends "2" pings, the client
+    // replies "3". The interval/timeout come from the `0{...}` handshake frame
+    // (see `handleHandshake`); these are the engine.io defaults used until the
+    // real values arrive. Matches suprsend-web-sdk, which delegates heartbeat
+    // to socket.io-client.
+    private var serverPingInterval: TimeInterval = 25.0
+    private var serverPingTimeout: TimeInterval = 20.0
+    private let heartbeatCheckInterval: UInt64 = 5_000_000_000
+
+    // Reconnect backoff matches suprsend-web-sdk (socket.io-client defaults).
+    private let reconnectionDelay: TimeInterval = 1.0
+    private let reconnectionDelayMax: TimeInterval = 10.0
+
     // Connection state
     private var lastPongReceived = Date()
     private var reconnectionAttempts = 0
@@ -136,6 +147,14 @@ class SocketClient: NSObject, ObservableObject {
 
         let request = URLRequest(url: url)
 
+        // Tear down any previous task before creating a new one. On heartbeat-
+        // timeout-driven reconnects the underlying TCP connection is often
+        // still alive on the server, so reassigning `webSocketTask` without
+        // cancelling first leaves the old room joined and produces duplicate
+        // `joined_room` / `new_notification` events. Stale delegate callbacks
+        // from this cancellation are ignored via identity checks below.
+        webSocketTask?.cancel(with: .goingAway, reason: nil)
+
         webSocketTask = urlSession?.webSocketTask(with: request)
         webSocketTask?.resume()
 
@@ -174,7 +193,7 @@ class SocketClient: NSObject, ObservableObject {
     // Disconnect from WebSocket
     func disconnect() {
         userInitiatedDisconnect = true
-        logger.info("🔌 Disconnecting...")
+        logger.info("Disconnecting socket")
         stopKeepAlive()
         webSocketTask?.cancel(with: .goingAway, reason: nil)
         webSocketTask = nil
@@ -184,67 +203,47 @@ class SocketClient: NSObject, ObservableObject {
     
     private func startKeepAlive() {
         lastPongReceived = Date()
-        
-        // Start ping timer
-        pingTask = Task {
-            while !Task.isCancelled {
-                // Wait 30 seconds
-                try? await Task.sleep(nanoseconds: pingInterval)
-                
-                // Check if still should continue
-                guard !Task.isCancelled else { break }
-                
-                // Send heartbeat on main thread
-                await MainActor.run {
-                    sendPing()
-                }
-            }
-        }
-        
-        // Start heartbeat monitor
+
+        // Engine.IO v4 is server-driven, so this is only a dead-connection
+        // watchdog: every `heartbeatCheckInterval` we verify that a server
+        // ping (or any traffic) has arrived within
+        // `serverPingInterval + serverPingTimeout`. No client-initiated pings.
         heartbeatTask = Task {
             while !Task.isCancelled {
-                // Wait 30 seconds
-                try? await Task.sleep(nanoseconds: heartbeatTimeout)
-                
-                // Check if still should continue
+                try? await Task.sleep(nanoseconds: heartbeatCheckInterval)
                 guard !Task.isCancelled else { break }
-                
-                // Send heartbeat on main thread
                 await MainActor.run {
                     checkHeartbeat()
                 }
             }
         }
-        
-        logger.info("Keep-alive started - ping every \(pingInterval)s, timeout after \(heartbeatTimeout)s")
+
+        logger.info("Keep-alive started - pingInterval=\(serverPingInterval)s pingTimeout=\(serverPingTimeout)s")
     }
-    
+
     private func stopKeepAlive() {
-        pingTask?.cancel()
         heartbeatTask?.cancel()
-        reconnectionTimer?.invalidate()
-        
-        pingTask = nil
+        reconnectionTask?.cancel()
+
         heartbeatTask = nil
-        reconnectionTimer = nil
+        reconnectionTask = nil
     }
     
     // Send text message
     func sendMessage(_ text: String) {
         guard connectionStatus == .connected else {
-            logger.error("❌ Cannot send message - not connected")
+            logger.error("Cannot send message - not connected")
             return
         }
-        
+
         let message = URLSessionWebSocketTask.Message.string(text)
         webSocketTask?.send(message) { [weak self] error in
             if let error = error {
                 self?.connectionStatus = .error
                 self?.error = "Send failed: \(error.localizedDescription)"
-                logger.error("❌ Send error: \(error)")
+                logger.error("Send error: \(error)")
             } else {
-                logger.info("✅ Message sent")
+                logger.info("Message sent")
             }
         }
     }
@@ -263,8 +262,18 @@ class SocketClient: NSObject, ObservableObject {
     
     // Listen for incoming messages
     private func listen() {
-        webSocketTask?.receive { [weak self] result in
+        // Capture the task we're listening on so we can detect (and ignore)
+        // callbacks for a task we've already replaced — otherwise the in-flight
+        // receive on the previous task, completing with an error after we
+        // cancel it in `connect()`, would trigger `handleConnectionLost` and
+        // clobber the new socket's status / keep-alive state.
+        let task = webSocketTask
+        task?.receive { [weak self] result in
             guard let self else { return }
+            guard task === self.webSocketTask else {
+                logger.info("Ignoring receive callback for stale webSocketTask")
+                return
+            }
             switch result {
             case .success(let message):
                 switch message {
@@ -275,10 +284,10 @@ class SocketClient: NSObject, ObservableObject {
                 @unknown default:
                     break
                 }
-                
+
                 // Continue listening
                 self.listen()
-                
+
             case .failure(let error):
                 self.connectionStatus = .error
                 self.error = "Receive failed: \(error.localizedDescription)"
@@ -296,6 +305,10 @@ class SocketClient: NSObject, ObservableObject {
         if text.starts(with: "3"){
             lastPongReceived = Date()
         } else if text.starts(with: "0") {
+            // engine.io handshake — `0{"sid":...,"pingInterval":25000,"pingTimeout":20000}`.
+            // The web-sdk lets socket.io-client read these and so do we; treat
+            // anything we can't parse as the engine.io defaults already in place.
+            handleHandshake(jsonString: String(text.dropFirst()))
             sendAuthMessage()
         } else if text.starts(with: "2") {
             lastPongReceived = Date()
@@ -304,6 +317,20 @@ class SocketClient: NSObject, ObservableObject {
             let message = text.suffix(from: text.index(text.startIndex, offsetBy: 2))
             parseSocketMessage(jsonString: String(message))
         }
+    }
+
+    private func handleHandshake(jsonString: String) {
+        guard let data = jsonString.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return
+        }
+        if let pi = json["pingInterval"] as? Double {
+            serverPingInterval = pi / 1000.0
+        }
+        if let pt = json["pingTimeout"] as? Double {
+            serverPingTimeout = pt / 1000.0
+        }
+        logger.info("Engine.IO handshake: pingInterval=\(serverPingInterval)s pingTimeout=\(serverPingTimeout)s")
     }
     
     private func parseSocketMessage(jsonString: String) {
@@ -332,70 +359,65 @@ class SocketClient: NSObject, ObservableObject {
     }
     
     private func handleDataMessage(_ data: Data) {
-        logger.info("📦 Received data: \(data.count) bytes")
+        logger.info("Received data: \(data.count) bytes")
     }
     
     private func checkHeartbeat() {
         let timeSinceLastPong = Date().timeIntervalSince(lastPongReceived)
-        
-        if isTimeIntervalGreater(timeSinceLastPong, than: heartbeatTimeout) {
-            logger.warning("💔 Heartbeat timeout - no pong received for \(timeSinceLastPong)s")
+        // Server pings every `pingInterval` and considers itself unreachable
+        // after `pingTimeout` past that; mirroring socket.io-client, we treat
+        // the connection as dead once we've gone the full window without any
+        // server frame.
+        let threshold = serverPingInterval + serverPingTimeout
+        if timeSinceLastPong > threshold {
+            logger.warning("Heartbeat timeout - no server frame for \(timeSinceLastPong)s (threshold \(threshold)s)")
             handleConnectionLost()
         }
     }
-    
-    private func sendPing() {
-        let timeSinceLastPong = Date().timeIntervalSince(lastPongReceived)
-        
-        if isTimeIntervalGreater(timeSinceLastPong, than: heartbeatTimeout) {
-            sendMessage("2")
-        }
-    }
-    
-    private func isTimeIntervalGreater(_ interval: TimeInterval, than nanoseconds: UInt64) -> Bool {
-        // Handle edge cases
-        guard interval >= 0 else { return false }
-        
-        // Convert to nanoseconds for comparison
-        let intervalAsNanos = interval * 1_000_000_000
-        
-        // Check for overflow
-        if intervalAsNanos > Double(UInt64.max) {
-            return true  // TimeInterval is definitely larger
-        }
-        
-        return UInt64(intervalAsNanos) > nanoseconds
-    }
 
-    
+
     private func handleConnectionLost() {
-        if connectionStatus == .connected || connectionStatus == .connecting {
-            return
-        }
+        // Bail when the user explicitly disconnected, or when a reconnect is
+        // already in flight — prevents double-scheduling when both the receive
+        // failure path and the close-delegate path race here.
+        if userInitiatedDisconnect { return }
+        if reconnectionTask != nil { return }
 
-        logger.error("🔌 Connection lost - attempting reconnection")
+        logger.error("Connection lost - attempting reconnection")
         connectionStatus = .disconnected
         stopKeepAlive()
 
         connectionLost.send(())
         scheduleReconnection()
     }
-    
+
     private func scheduleReconnection() {
         guard reconnectionAttempts < maxReconnectionAttempts else {
-            logger.error("❌ Max reconnection attempts reached")
+            logger.error("Max reconnection attempts reached")
             return
         }
-        
+
         reconnectionAttempts += 1
-        
-        // Exponential backoff with max delay
-        let delay = min(reconnectInterval * Double(reconnectionAttempts), 30.0)
-        
-        logger.warning("🔄 Reconnecting in \(delay)s (attempt \(reconnectionAttempts)/\(maxReconnectionAttempts))")
-        
-        reconnectionTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
-            self?.connect()
+
+        // Exponential backoff capped at `reconnectionDelayMax`. Matches
+        // socket.io-client's defaults used by suprsend-web-sdk
+        // (`reconnectionDelay: 1000`, `reconnectionDelayMax: 10000`).
+        let backoff = reconnectionDelay * pow(2.0, Double(reconnectionAttempts - 1))
+        let delay = min(backoff, reconnectionDelayMax)
+
+        logger.warning("Reconnecting in \(delay)s (attempt \(reconnectionAttempts)/\(maxReconnectionAttempts))")
+
+        // Use Task.sleep rather than Timer.scheduledTimer because this is
+        // invoked from the URLSession delegate queue and from `listen()`'s
+        // receive completion handler — neither has a guaranteed running run
+        // loop, which would silently prevent the Timer from firing.
+        reconnectionTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                self?.reconnectionTask = nil
+                self?.connect()
+            }
         }
     }
 }
@@ -404,26 +426,43 @@ class SocketClient: NSObject, ObservableObject {
 // MARK: - URLSessionWebSocketDelegate
 extension SocketClient: URLSessionWebSocketDelegate {
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
-        logger.info("✅ WebSocket connected")
+        // Ignore callbacks for a task we've already replaced — a stale `open`
+        // arriving after we reconnected would otherwise mark the new socket
+        // as connected and reset keep-alive state under it.
+        guard webSocketTask === self.webSocketTask else {
+            logger.info("Ignoring didOpen for stale webSocketTask")
+            return
+        }
+
+        logger.info("WebSocket connected")
         connectionStatus = .connected
         reconnectionAttempts = 0
         lastPongReceived = Date()
-        
+
         startKeepAlive()
     }
-    
+
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
-        logger.warning("🔌 WebSocket closed with code: \(closeCode)")
-        
+        logger.warning("WebSocket closed with code: \(closeCode)")
+
         if let reason = reason, let reasonString = String(data: reason, encoding: .utf8) {
             logger.info("Close reason: \(reasonString)")
         }
-        
+
+        // Ignore close callbacks for tasks we've already replaced (typically
+        // the previous task we explicitly cancelled in `connect()`).
+        guard webSocketTask === self.webSocketTask else {
+            logger.info("Ignoring didClose for stale webSocketTask")
+            return
+        }
+
         connectionStatus = .disconnected
         stopKeepAlive()
 
-        // Auto-reconnect unless explicitly closed
-        if closeCode != .goingAway {
+        // Auto-reconnect unless explicitly closed. Guard against double-
+        // scheduling when both this path and `listen()`'s receive-failure path
+        // race here for the same disconnect.
+        if closeCode != .goingAway, reconnectionTask == nil {
             connectionLost.send(())
             scheduleReconnection()
         }
