@@ -137,9 +137,11 @@ extension Push {
             let url = URL(string: actionURL) {
             let handleLink = config.urlDelegate?.shouldHandleSuprSendDeepLink(url) ?? true
             if handleLink {
+#if os(iOS) || os(watchOS) || os(tvOS)
                 DispatchQueue.main.async {
                     UIApplication.shared.open(url)
                 }
+#endif
             }
         }
     }
