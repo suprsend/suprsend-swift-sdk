@@ -220,7 +220,6 @@ public class Preferences {
 
         let path = getUrlpath(path: "full_preference", qp: queryParams)
 
-        logger.info("[SuprSend][Preferences] GET \(path.absoluteString)")
         let response: PreferenceAPIResponse = await config.client().request(
             reqData: .init(
                 path: path.absoluteString,
@@ -251,7 +250,6 @@ public class Preferences {
 
         let path = getUrlpath(path: "category", qp: queryParams)
 
-        logger.info("[SuprSend][Preferences] GET \(path.absoluteString)")
         return await config.client().request(
             reqData: .init(path: path.absoluteString, payload: nil, type: .get))
     }
@@ -268,7 +266,6 @@ public class Preferences {
         ]
 
         let path = getUrlpath(path: "category/\(category)", qp: questionParams)
-        logger.info("[SuprSend][Preferences] GET \(path.absoluteString)")
         return await config.client().request(
             reqData: .init(path: path.absoluteString, payload: nil, type: .get))
     }
@@ -282,7 +279,6 @@ public class Preferences {
             "tenant_id": args?.tenantId
         ]
         let path = getUrlpath(path: "channel_preference", qp: queryParams)
-        logger.info("[SuprSend][Preferences] GET \(path.absoluteString)")
         return await config.client().request(
             reqData: .init(path: path.absoluteString, payload: nil, type: .get))
     }
@@ -302,7 +298,6 @@ public class Preferences {
 
         let path = getUrlpath(path: "category/\(category)", qp: queryParams)
 
-        logger.info("[SuprSend][Preferences] PATCH \(path.absoluteString) body=\(body)")
         let response: PreferenceAPIResponse = await config.client().request(
             reqData: .init(
                 path: path.absoluteString,
@@ -331,7 +326,6 @@ public class Preferences {
         ]
         let path = getUrlpath(path: "channel_preference", qp: queryParams)
 
-        logger.info("[SuprSend][Preferences] PATCH \(path.absoluteString) body=\(body)")
         let response: PreferenceAPIResponse = await config.client().request(
             reqData: .init(
                 path: path.absoluteString,

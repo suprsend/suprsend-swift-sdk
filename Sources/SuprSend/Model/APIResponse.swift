@@ -118,6 +118,18 @@ public class APIResponse: NSObject, Response {
         self.body = body
         self.error = error
     }
+
+    public required init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.status = (try? container.decodeIfPresent(ResponseStatus.self, forKey: .status)) ?? .success
+        self.statusCode = try container.decodeIfPresent(StatusCode.self, forKey: .statusCode)
+        self.body = try container.decodeIfPresent(ResponseBody.self, forKey: .body)
+        self.error = try container.decodeIfPresent(ResponseError.self, forKey: .error)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case status, statusCode, body, error
+    }
 }
 
 extension Response {
