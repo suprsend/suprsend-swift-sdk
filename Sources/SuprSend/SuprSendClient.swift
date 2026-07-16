@@ -49,7 +49,7 @@ public class SuprSendClient: NSObject {
 
     var host: String
     var publicKey: String
-    private(set) var distinctID: String?
+    public private(set) var distinctID: String?
     var deviceToken: String?
     private(set) var userToken: String?
     private var apiClient: APIClient?
@@ -115,6 +115,11 @@ public class SuprSendClient: NSObject {
         self.clientUserAgent = resolvedUA
         self.userAgent = buildUserAgent(resolvedUA)
         self.clientUserAgentJSON = encodeClientUserAgent(resolvedUA)
+
+        // Now that the public key is set, retry any events queued before it was
+        // available — e.g. a notification tap handled on a cold (killed-state)
+        // launch, where this configure() runs after the native push callback.
+        self.push.flushPendingEvents()
     }
     
     @objc public func setDeepLinkDelegate(_ urlDelegate: SuprSendDeepLinkDelegate) {
