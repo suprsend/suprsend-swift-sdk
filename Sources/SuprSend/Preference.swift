@@ -198,7 +198,7 @@ public class Preferences {
     /// fires.
     private func resolvedArgs(_ args: Args?, showOptOutChannels: Bool) -> Args {
         Args(
-            tenantId: args?.tenantId ?? preferenceArgs?.tenantId,
+            tenantId: args?.tenantId ?? preferenceArgs?.tenantId ?? config.tenantId,
             showOptOutChannels: showOptOutChannels,
             tags: args?.tags ?? preferenceArgs?.tags,
             locale: args?.locale ?? preferenceArgs?.locale
@@ -211,7 +211,7 @@ public class Preferences {
     public func getPreferences(args: Args? = nil) async -> PreferenceAPIResponse {
 
         let queryParams: [String: Any?] = [
-            "tenant_id": args?.tenantId,
+            "tenant_id": args?.tenantId ?? config.tenantId,
             "show_opt_out_channels": args?.showOptOutChannels ?? true,
             "tags": encodeTags(args?.tags),
             "locale": args?.locale,
@@ -240,7 +240,7 @@ public class Preferences {
     ///   - args: Arguments for the request. Defaults to `nil`.
     public func getCategories(args: CategoryArgs? = nil) async -> APIResponse {
         let queryParams: [String: Any?] = [
-            "tenant_id": args?.tenantId,
+            "tenant_id": args?.tenantId ?? config.tenantId,
             "show_opt_out_channels": "\(args?.showOptOutChannels ?? true)",
             "tags": encodeTags(args?.tags),
             "locale": args?.locale,
@@ -260,7 +260,7 @@ public class Preferences {
     ///   - args: Arguments for the request. Defaults to an empty dictionary.
     public func getCategory(category: String, args: Args? = nil) async -> APIResponse {
         let questionParams: [String: Any?] = [
-            "tenant_id": args?.tenantId,
+            "tenant_id": args?.tenantId ?? config.tenantId,
             "show_opt_out_channels": "\(args?.showOptOutChannels ?? true)",
             "locale": args?.locale,
         ]
@@ -276,7 +276,7 @@ public class Preferences {
     ///     other fields on ``Args`` are ignored. Defaults to `nil`.
     public func getOverallChannelPreferences(args: Args? = nil) async -> APIResponse {
         let queryParams: [String: Any?] = [
-            "tenant_id": args?.tenantId
+            "tenant_id": args?.tenantId ?? config.tenantId
         ]
         let path = getUrlpath(path: "channel_preference", qp: queryParams)
         return await config.client().request(
@@ -290,7 +290,7 @@ public class Preferences {
         args: Args? = nil
     ) async -> PreferenceAPIResponse {
         let queryParams: [String: Any?] = [
-            "tenant_id": args?.tenantId ?? preferenceArgs?.tenantId,
+            "tenant_id": args?.tenantId ?? preferenceArgs?.tenantId ?? config.tenantId,
             "show_opt_out_channels": "\(resolveShowOptOutChannels(args))",
             "tags": encodeTags(args?.tags ?? preferenceArgs?.tags),
             "locale": args?.locale ?? preferenceArgs?.locale,
@@ -322,7 +322,7 @@ public class Preferences {
         args: Args? = nil
     ) async -> PreferenceAPIResponse {
         let queryParams: [String: Any?] = [
-            "tenant_id": args?.tenantId ?? preferenceArgs?.tenantId
+            "tenant_id": args?.tenantId ?? preferenceArgs?.tenantId ?? config.tenantId
         ]
         let path = getUrlpath(path: "channel_preference", qp: queryParams)
 

@@ -63,7 +63,7 @@ public class Feed {
             pageSize = pageSizeOption
         }
         self.feedOptions = .init(
-            tenantId: options?.tenantId ?? FeedConstants.tenantId,
+            tenantId: options?.tenantId ?? config.tenantId ?? FeedConstants.tenantId,
             pageSize: pageSize,
             stores: Self.validatedStores(options?.stores),
             host: options?.host

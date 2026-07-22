@@ -4,15 +4,19 @@ import SuprSend
 struct RootView: View {
     @EnvironmentObject private var router: AppRouter
     @AppStorage(SuprSendConstants.distinctIDKey) private var distinctID: String = ""
+    @AppStorage(SuprSendConstants.tenantIDKey) private var tenantID: String = ""
+    @AppStorage(SuprSendConstants.enableUserTokenKey) private var enableUserToken: Bool = true
     @State private var isIdentified: Bool = false
 
     var body: some View {
         Group {
             if distinctID.isEmpty {
-                LoginScreen { id in
+                LoginScreen { id, tenant, useToken in
                     Task {
-                        await SuprSendTokenService.identify(distinctID: id)
+                        await SuprSendTokenService.identify(distinctID: id, tenantID: tenant.isEmpty ? nil : tenant, enableUserToken: useToken)
                         distinctID = id
+                        tenantID = tenant
+                        enableUserToken = useToken
                         isIdentified = true
                         router.screen = .home
                     }
@@ -20,7 +24,7 @@ struct RootView: View {
             } else if !isIdentified {
                 ProgressView()
                     .task {
-                        await SuprSendTokenService.identify(distinctID: distinctID)
+                        await SuprSendTokenService.identify(distinctID: distinctID, tenantID: tenantID.isEmpty ? nil : tenantID, enableUserToken: enableUserToken)
                         isIdentified = true
                     }
             } else {
@@ -40,6 +44,8 @@ struct RootView: View {
             _ = await SuprSend.shared.reset()
             await MainActor.run {
                 distinctID = ""
+                tenantID = ""
+                enableUserToken = true
                 isIdentified = false
                 router.screen = .home
             }
