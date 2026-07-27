@@ -371,6 +371,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"SwiftExample/Preview Content\"";
+				DEVELOPMENT_TEAM = G7DJURR5RJ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SwiftExample/Info.plist;
@@ -402,6 +403,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"SwiftExample/Preview Content\"";
+				DEVELOPMENT_TEAM = G7DJURR5RJ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SwiftExample/Info.plist;
@@ -430,6 +432,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = G7DJURR5RJ;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SwiftExampleNotificationService/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = SwiftExampleNotificationService;
@@ -456,6 +459,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = G7DJURR5RJ;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SwiftExampleNotificationService/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = SwiftExampleNotificationService;
@@ -513,7 +517,7 @@
 /* Begin XCLocalSwiftPackageReference section */
 		AA00100000000000000000A1 /* XCLocalSwiftPackageReference ".." */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = "..";
+			relativePath = ..;
 		};
 /* End XCLocalSwiftPackageReference section */
 

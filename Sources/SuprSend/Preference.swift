@@ -146,8 +146,12 @@ public class Preferences {
     /// - Parameters:
     ///   - path: The path to append to the base URL. Defaults to `nil`.
     ///   - qp: Query parameters to include in the request. Defaults to an empty dictionary.
-    func getUrlpath(path: String, qp: [String: Any?]? = nil) -> URL {
-        let urlPath = "v2/subscriber/\(config.distinctID?.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String())/\(path)/"
+    func getUrlpath(path: String? = nil, qp: [String: Any?]? = nil) -> URL {
+        let distinctID = config.distinctID?.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String()
+        var urlPath = "v1/user/\(distinctID)/preference/"
+        if let path, !path.isEmpty {
+            urlPath += "\(path)/"
+        }
         let queryParams = qp?.compactMap({ item in
             if let value = item.value {
                 URLQueryItem(name: item.key, value: String(describing: value))
@@ -218,7 +222,7 @@ public class Preferences {
         ]
         preferenceArgs = args
 
-        let path = getUrlpath(path: "full_preference", qp: queryParams)
+        let path = getUrlpath(qp: queryParams)
 
         let response: PreferenceAPIResponse = await config.client().request(
             reqData: .init(

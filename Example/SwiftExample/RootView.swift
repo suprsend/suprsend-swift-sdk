@@ -3,9 +3,9 @@ import SuprSend
 
 struct RootView: View {
     @EnvironmentObject private var router: AppRouter
-    @AppStorage(SuprSendConstants.distinctIDKey) private var distinctID: String = ""
-    @AppStorage(SuprSendConstants.tenantIDKey) private var tenantID: String = ""
-    @AppStorage(SuprSendConstants.enableUserTokenKey) private var enableUserToken: Bool = true
+    @AppStorage(StorageKeys.distinctID) private var distinctID: String = ""
+    @AppStorage(StorageKeys.tenantID) private var tenantID: String = ""
+    @AppStorage(StorageKeys.enableUserToken) private var enableUserToken: Bool = true
     @State private var isIdentified: Bool = false
 
     var body: some View {

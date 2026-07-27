@@ -8,7 +8,7 @@ struct HomeScreen: View {
     let onLogout: () -> Void
 
     @EnvironmentObject private var inboxViewModel: InboxViewModel
-    @AppStorage(SuprSendConstants.tenantIDKey) private var tenantID: String = ""
+    @AppStorage(StorageKeys.tenantID) private var tenantID: String = ""
     @State private var loggingOut: Bool = false
     @State private var tenantInput: String = ""
     private let sampleEmail = "user@example.com"

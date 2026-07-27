@@ -32,18 +32,30 @@ Edit `SwiftExample/SuprSendConstants.swift` and set your public key:
 enum SuprSendConstants {
     static let publicKey: String = "SS.PUBK.…"
     static let host: String? = nil  // optional override for self-hosted collectors
-    static let distinctIDKey: String = "suprsend_example_distinct_id"
+    static let tokenBaseURL: String = ""  // backend that mints JWT user tokens
+    static let feedAPIHost: String? = "https://inboxs.live"
+    static let feedSocketHost: String? = "https://betainbox.suprsend.com"
 }
 ```
 
-The Notification Service Extension carries its own copy of the same key in
-`SwiftExampleNotificationService/NotificationService.swift` — keep them in
-sync. (Extension targets cannot share Swift files with the main app when
-the app uses Xcode's file-system-synchronized groups.)
+The inbox feed does **not** route through `host` — it has its own REST and
+socket endpoints, passed to the SDK as `FeedHost` on `IFeedOptions`. So
+overriding `host` alone still leaves the feed on the endpoints above; set
+`feedAPIHost` / `feedSocketHost` too when testing against a non-production
+stack. Either can be `nil` to fall back to the SDK's built-in default.
+
+The same file also defines `StorageKeys` — the `UserDefaults` keys backing the
+example's login state. That's internal plumbing; you don't need to touch it.
+
+The Notification Service Extension carries its own copy of `publicKey` and
+`host` in `SwiftExampleNotificationService/NotificationService.swift` (as
+`NSEConstants`) — keep them in sync. (Extension targets cannot share Swift
+files with the main app when the app uses Xcode's file-system-synchronized
+groups.)
 
 If you want to exercise the JWT-authenticated identify flow, point
-`SuprSendTokenService.tokenBaseURL` at a backend that mints user tokens.
-When the endpoint is unreachable, the example falls back to an
+`SuprSendConstants.tokenBaseURL` at a backend that mints user tokens. While
+it's blank, or when the endpoint is unreachable, the example falls back to an
 unauthenticated `identify(distinctID:)` call.
 
 Open the project and pick your signing team — `DEVELOPMENT_TEAM` is left
