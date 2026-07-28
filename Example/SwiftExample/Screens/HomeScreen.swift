@@ -8,8 +8,15 @@ struct HomeScreen: View {
     let onLogout: () -> Void
 
     @EnvironmentObject private var inboxViewModel: InboxViewModel
+    @AppStorage(StorageKeys.tenantID) private var tenantID: String = ""
     @State private var loggingOut: Bool = false
+    @State private var tenantInput: String = ""
     private let sampleEmail = "user@example.com"
+
+    private var canSwitchTenant: Bool {
+        let trimmed = tenantInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !trimmed.isEmpty && trimmed != tenantID
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -23,6 +30,9 @@ struct HomeScreen: View {
                     .lineLimit(1)
             }
             .padding(.bottom, 28)
+
+            tenantSwitcher
+                .padding(.bottom, 24)
 
             VStack(spacing: 12) {
                 actionButton("Preferences", action: onOpenPreferences)
@@ -81,6 +91,64 @@ struct HomeScreen: View {
         .padding(.top, 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(.secondarySystemBackground))
+        .onAppear { tenantInput = tenantID }
+    }
+
+    /// Switches the active tenant at runtime. The user's token must scope the
+    /// target tenant (a `tenant_id` array in the JWT) — no re-identify needed.
+    private var tenantSwitcher: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("ACTIVE TENANT")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.secondary)
+                .kerning(0.5)
+
+            HStack(spacing: 8) {
+                TextField("e.g. acme", text: $tenantInput)
+                    .autocapitalization(.none)
+                    .disableAutocorrection(true)
+                    .font(.system(size: 14))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(Color(.systemBackground))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color(.systemGray4), lineWidth: 1)
+                    )
+
+                Button(action: switchTenant) {
+                    Text("Switch")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(canSwitchTenant ? Color.black : Color(.systemGray3))
+                        .cornerRadius(8)
+                }
+                .disabled(!canSwitchTenant)
+            }
+
+            Text(tenantID.isEmpty ? "No tenant set" : "Current: \(tenantID)")
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+        }
+    }
+
+    private func switchTenant() {
+        let trimmed = tenantInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != tenantID else { return }
+
+        // Update the SDK's global tenant. Subsequent track/preferences/feed
+        // calls are scoped to it.
+        SuprSend.shared.changeTenant(tenantId: trimmed)
+        tenantID = trimmed
+
+        // Already-running feeds keep their original tenant, so re-initialise the
+        // inbox feed to load the new tenant's notifications. Preferences re-fetch
+        // on their own when that screen is next opened.
+        inboxViewModel.reconnectAndRefresh()
+
+        ToastCenter.shared.show("Switched to tenant \(trimmed)")
     }
 
     private var inboxButton: some View {

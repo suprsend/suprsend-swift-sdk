@@ -16,10 +16,17 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         )
         SuprSend.shared.enableLogging()
 
-        if let storedDistinctID = UserDefaults.standard.string(forKey: SuprSendConstants.distinctIDKey),
+        if let storedDistinctID = UserDefaults.standard.string(forKey: StorageKeys.distinctID),
            !storedDistinctID.isEmpty {
+            let storedTenantID = UserDefaults.standard.string(forKey: StorageKeys.tenantID)
+            // Defaults to true when never set, matching the login form default.
+            let enableUserToken = UserDefaults.standard.object(forKey: StorageKeys.enableUserToken) as? Bool ?? true
             Task {
-                await SuprSendTokenService.identify(distinctID: storedDistinctID)
+                await SuprSendTokenService.identify(
+                    distinctID: storedDistinctID,
+                    tenantID: (storedTenantID?.isEmpty ?? true) ? nil : storedTenantID,
+                    enableUserToken: enableUserToken
+                )
             }
         }
 

@@ -34,7 +34,18 @@ final class InboxViewModel: ObservableObject {
     }
 
     private static func makeOptions(stores: [IStore]) -> IFeedOptions {
-        IFeedOptions(tenantId: nil, pageSize: 10, stores: stores, host: nil)
+        IFeedOptions(tenantId: nil, pageSize: 10, stores: stores, host: feedHost)
+    }
+
+    /// Nil when neither host is configured, so the SDK's own defaults apply.
+    private static var feedHost: FeedHost? {
+        guard SuprSendConstants.feedAPIHost != nil || SuprSendConstants.feedSocketHost != nil else {
+            return nil
+        }
+        return FeedHost(
+            socketHost: SuprSendConstants.feedSocketHost,
+            apiHost: SuprSendConstants.feedAPIHost
+        )
     }
 
     private func bindFeed() {

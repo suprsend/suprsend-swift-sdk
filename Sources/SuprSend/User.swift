@@ -37,7 +37,8 @@ public class User {
             insertID: UUID().uuidString,
             time: Date().timeIntervalSince1970,
             distinctID: distinctID,
-            eventProperties: eventProperties
+            eventProperties: eventProperties,
+            tenantId: config.tenantId
         )
         return await config.eventApi(payload: .init(event))
     }

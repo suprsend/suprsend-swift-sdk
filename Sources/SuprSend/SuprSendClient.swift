@@ -49,7 +49,19 @@ public class SuprSendClient: NSObject {
 
     var host: String
     var publicKey: String
-    private(set) var distinctID: String?
+    public private(set) var distinctID: String?
+
+    /// The tenant the SDK currently operates within, sent as `tenant_id` on
+    /// every preferences request and applied to newly-initialised feeds that
+    /// don't specify their own tenant.
+    ///
+    /// This is *session* state, not build config: set it at login via
+    /// ``identify(distinctID:userToken:tenantId:options:)`` and switch it at
+    /// runtime via ``changeTenant(tenantId:)``. A per-call `tenantId` (on
+    /// ``track(event:properties:tenantId:)``, ``Preferences/Args`` or
+    /// ``IFeedOptions``) always overrides this value.
+    public private(set) var tenantId: String?
+
     var deviceToken: String?
     private(set) var userToken: String?
     private var apiClient: APIClient?
@@ -115,6 +127,11 @@ public class SuprSendClient: NSObject {
         self.clientUserAgent = resolvedUA
         self.userAgent = buildUserAgent(resolvedUA)
         self.clientUserAgentJSON = encodeClientUserAgent(resolvedUA)
+
+        // Now that the public key is set, retry any events queued before it was
+        // available — e.g. a notification tap handled on a cold (killed-state)
+        // launch, where this configure() runs after the native push callback.
+        self.push.flushPendingEvents()
     }
     
     @objc public func setDeepLinkDelegate(_ urlDelegate: SuprSendDeepLinkDelegate) {
@@ -171,11 +188,16 @@ public class SuprSendClient: NSObject {
     /// - Parameters:
     ///   - distinctID: Distinct ID for the device
     ///   - userToken: JWT token for the user
+    ///   - tenantId: Tenant the user is logging into. Stored as the global
+    ///     ``tenantId`` and applied to subsequent preferences/feed calls. When
+    ///     the user's token scopes multiple tenants, switch between them at
+    ///     runtime with ``changeTenant(tenantId:)`` — no re-identify needed.
     ///   - options: Authenticate Options
     /// - Returns: Respnose from the API call
     public func identify(
         distinctID: String,
         userToken: String? = nil,
+        tenantId: String? = nil,
         options: AuthenticateOptions? = nil
     ) async -> APIResponse {
 
@@ -187,6 +209,14 @@ public class SuprSendClient: NSObject {
                     message: "User already loggedin, reset current user to login new user"
                 )
             )
+        }
+
+        // Set the tenant for this session before any request goes out. Placed
+        // after the "other user" guard so a rejected identify doesn't mutate
+        // the current user's tenant. `nil` (e.g. token-refresh re-identify)
+        // leaves the existing tenant untouched.
+        if let tenantId {
+            self.tenantId = tenantId
         }
 
         // updating usertoken for existing user
@@ -234,7 +264,8 @@ public class SuprSendClient: NSObject {
                     insertID: UUID().uuidString,
                     time: Date.now.timeIntervalSince1970,
                     distinctID: distinctID,
-                    properties: .init(["$identified_id": distinctID])
+                    properties: .init(["$identified_id": distinctID]),
+                    tenantId: self.tenantId
                 )
             )
         )
@@ -259,12 +290,38 @@ public class SuprSendClient: NSObject {
         (distinctID != nil) && (checkUserToken ? (userToken != nil) : true)
     }
 
+    /// Switch the active tenant after login.
+    ///
+    /// Intended for users whose token scopes multiple tenants (a `tenant_id`
+    /// array): identify once, then call this to move between them without
+    /// resetting the session. Updates the global ``tenantId`` used by
+    /// subsequent preferences requests and newly-initialised feeds.
+    ///
+    /// - Note: Already-running feed instances keep the tenant they were
+    ///   initialised with — re-initialise a feed (via ``feeds``) to have it
+    ///   reflect the new tenant. Re-fetch preferences (``Preferences/getPreferences(args:)``)
+    ///   to load the new tenant's data.
+    /// - Parameter tenantId: The tenant to switch to.
+    @objc public func changeTenant(tenantId: String) {
+        if !isIdentified(checkUserToken: false) {
+            logger.warning("[SuprSend]: changeTenant called before identify. Tenant will apply once a user is identified.")
+        }
+        self.tenantId = tenantId
+    }
+
     /// Track event with given properties
     /// - Parameters:
     ///   - event: The Event name
     ///   - properties: Properties for the event
+    ///   - tenantId: Tenant to attribute this single event to. When `nil` the
+    ///     global ``tenantId`` is used. Scoping one event this way does not
+    ///     change the session tenant — use ``changeTenant(tenantId:)`` for that.
     /// - Returns: Response from the API call
-    public func track(event: String, properties: EventProperty? = nil) async -> APIResponse {
+    public func track(
+        event: String,
+        properties: EventProperty? = nil,
+        tenantId: String? = nil
+    ) async -> APIResponse {
         let validatedProperties: EventProperty
         if let properties {
             validatedProperties = Utils.shared.validateObjData(data: properties)
@@ -277,7 +334,8 @@ public class SuprSendClient: NSObject {
             insertID: UUID().uuidString,
             time: Date().timeIntervalSince1970,
             distinctID: distinctID ?? String(),
-            properties: validatedProperties.convertToProperty()
+            properties: validatedProperties.convertToProperty(),
+            tenantId: tenantId ?? self.tenantId
         )
 
         return await eventApi(payload: .init(event))
@@ -291,12 +349,18 @@ public class SuprSendClient: NSObject {
             validatedProperties = .init()
         }
 
+        // Public notification events ($notification_clicked/_delivered/_dismiss)
+        // omit tenant_id — the tenant is resolved server-side from the
+        // notification id, and this path can run unidentified (Notification
+        // Service Extension / cold start) where no reliable tenant exists.
         let event = Event(
             event: event,
             insertID: UUID().uuidString,
             time: Date().timeIntervalSince1970,
             distinctID: distinctID ?? String(),
-            properties: validatedProperties.convertToProperty()
+            properties: validatedProperties.convertToProperty(),
+            tenantId: nil,
+            emitsTenant: false
         )
         let response: APIResponse = await publicClient().publicRequest(reqData: .init(path: "v2/event", payload: .init(event), type: .post))
         return response
@@ -385,6 +449,7 @@ public class SuprSendClient: NSObject {
         self.apiClient = nil
         self.distinctID = nil
         self.userToken = nil
+        self.tenantId = nil
 
         Utils.shared.removeLocalStorageData(key: Constants.authenticatedDistinctID)
 
