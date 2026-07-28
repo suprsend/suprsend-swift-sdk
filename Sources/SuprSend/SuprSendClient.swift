@@ -58,7 +58,8 @@ public class SuprSendClient: NSObject {
     /// This is *session* state, not build config: set it at login via
     /// ``identify(distinctID:userToken:tenantId:options:)`` and switch it at
     /// runtime via ``changeTenant(tenantId:)``. A per-call `tenantId` (on
-    /// ``Preferences/Args`` or ``IFeedOptions``) always overrides this value.
+    /// ``track(event:properties:tenantId:)``, ``Preferences/Args`` or
+    /// ``IFeedOptions``) always overrides this value.
     public private(set) var tenantId: String?
 
     var deviceToken: String?
@@ -312,8 +313,15 @@ public class SuprSendClient: NSObject {
     /// - Parameters:
     ///   - event: The Event name
     ///   - properties: Properties for the event
+    ///   - tenantId: Tenant to attribute this single event to. When `nil` the
+    ///     global ``tenantId`` is used. Scoping one event this way does not
+    ///     change the session tenant — use ``changeTenant(tenantId:)`` for that.
     /// - Returns: Response from the API call
-    public func track(event: String, properties: EventProperty? = nil) async -> APIResponse {
+    public func track(
+        event: String,
+        properties: EventProperty? = nil,
+        tenantId: String? = nil
+    ) async -> APIResponse {
         let validatedProperties: EventProperty
         if let properties {
             validatedProperties = Utils.shared.validateObjData(data: properties)
@@ -327,7 +335,7 @@ public class SuprSendClient: NSObject {
             time: Date().timeIntervalSince1970,
             distinctID: distinctID ?? String(),
             properties: validatedProperties.convertToProperty(),
-            tenantId: self.tenantId
+            tenantId: tenantId ?? self.tenantId
         )
 
         return await eventApi(payload: .init(event))
