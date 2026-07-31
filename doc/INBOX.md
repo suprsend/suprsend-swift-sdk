@@ -20,13 +20,13 @@ let feed: Feed = SuprSend.shared.feeds.initialize(options: IFeedOptions?)
 
 | Parameter  | Type        | Description                                                  |
 | ---------- | ----------- | ------------------------------------------------------------ |
-| `tenantId` | `String?`   | Tenant to read from. Defaults to "default" tenant            |
+| `tenantId` | `String?`   | Tenant to read from. Defaults to the active tenant set in `identify` or [changeTenant](../README.md#change-active-tenant), else the "default" tenant |
 | `pageSize` | `UInt?`     | Notifications per page. Defaults to 20                       |
 | `stores`   | `[IStore]?` | Filtered views inside feed (see [Stores](https://docs.suprsend.com/docs/multi-tabs))  |
 | `host`     | `FeedHost?` | Override API/socket host via `FeedHost(socketHost:apiHost:)` |
 
 > **Warning**
-> If you are passing `tenant_id` in feed, make sure to pass the `scope` key while creating [userToken](https://docs.suprsend.com/docs/client-authentication) passed during identifying user, else a **403** error will be thrown due to scope mismatch.
+> If you are passing `tenant_id` in feed (or have set it via `identify` / `changeTenant`), make sure that tenant is included in the `scope.tenant_id` key while creating [userToken](https://docs.suprsend.com/docs/client-authentication) passed during identifying user, else a **403** error will be thrown due to scope mismatch.
 
 ## Feed Client
 

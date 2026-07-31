@@ -8,11 +8,20 @@ You can trigger events from client to SuprSend using `track` method. This can be
 
 ```swift
 // syntax
-await SuprSend.shared.track(event: String, properties: [String: Any]?)
+await SuprSend.shared.track(event: String, properties: [String: Any]?, tenantId: String?)
 
 // example
 await SuprSend.shared.track(event: "test", properties: ["name": "john doe"])
 ```
+
+| Properties | Description                                                                                                                                                                                                                                                                             |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| event\*    | Name of the event.                                                                                                                                                                                                                                                                      |
+| properties | Event properties, used in the workflow triggered by this event.                                                                                                                                                                                                                         |
+| tenantId   | Needed only when your workspace has multiple tenants/brands. Attributes this single event to that tenant. Defaults to the active tenant set in `identify` or [changeTenant](../README.md#change-active-tenant). Passing it here doesn't change the active tenant of the session. |
+
+> **Warning**
+> If you are passing `tenantId` in event (or have set it via `identify` / `changeTenant`), make sure that tenant is included in the `scope.tenant_id` key while creating [userToken](https://docs.suprsend.com/docs/client-authentication) passed during identifying user, else an error will be thrown due to scope mismatch.
 
 **Returns:** `async -> APIResponse`
 
