@@ -7,11 +7,6 @@ Install and initialize the SuprSend iOS Swift SDK in your mobile app to enable p
 >
 > This documentation is for new version of iOS sdk. If you are using older version of sdk `SuprSendSdk` please refer [documentation](https://github.com/suprsend/SuprSend-iOS-SDK/tree/main/documentation)
 
-- [APNS Push Integration](doc/APNS_PUSH_SETUP.md)
-- [Events and User methods](doc/EVENTS_AND_USER_METHODS.md)
-- [InApp Feed (Headless)](doc/INBOX.md)
-- [Preferences](doc/PREFERENCES.md)
-
 ## Installation
 
 There are two ways you can install SuprSend SDK into your app:
@@ -58,12 +53,12 @@ Authenticate user so that all the actions performed after authenticating will be
 await SuprSend.shared.identify(distinctID: "YOUR_USER_ID", userToken: userTokenData, tenantId: "TENANT_ID", options: AuthenticateOptions(refreshUserToken: {oldUserToken,tokenPayload in return refreshedUserToken()}));
 ```
 
-| Properties       | Description                                                                                                                                                                                                      |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| distinctId\*     | Unique identifier to identify a user across platform.                                                                                                                                                            |
+| Properties       | Description                                                                                                                                                                                                                               |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| distinctId\*     | Unique identifier to identify a user across platform.                                                                                                                                                                                     |
 | userToken        | Mandatory when enhanced security mode is on. This is ES256 JWT token generated in your server-side. Refer [docs](https://docs.suprsend.com/docs/client-authentication#enhanced-security-mode-with-signed-user-token) to create userToken. |
-| tenantId         | Needed only when your workspace has multiple tenants/brands. Scopes the identified user's activity to that tenant. Its value must match `scope.tenant_id` in the `userToken` payload, else it raises a scoping error. |
-| refreshUserToken | This function is called by SDK internally to get new userToken before existing token is expired. The returned string is used as the new userToken.                                                               |
+| tenantId         | Needed only when your workspace has multiple tenants/brands. Scopes the identified user's activity to that tenant. Its value must match `scope.tenant_id` in the `userToken` payload, else it raises a scoping error.                     |
+| refreshUserToken | This function is called by SDK internally to get new userToken before existing token is expired. The returned string is used as the new userToken.                                                                                        |
 
 **Returns:** `async -> APIResponse`
 
@@ -93,8 +88,8 @@ Use the below method to switch the active tenant of identified user. This is mea
 SuprSend.shared.changeTenant(tenantId: "TENANT_ID")
 ```
 
-| Properties | Description                                                                                                                            |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Properties | Description                                                                                                                                 |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | tenantId\* | Tenant to switch to. Used by subsequent preferences requests and newly initialized feeds. Must be one of the tenants scoped in `userToken`. |
 
 > **Note**
@@ -118,3 +113,10 @@ struct APIResponse {
 
 }
 ```
+
+Once the SDK is integrated, refer to the following guides to set up individual features:
+
+- [APNS Push Integration](doc/APNS_PUSH_SETUP.md)
+- [Events and User methods](doc/EVENTS_AND_USER_METHODS.md)
+- [Preferences](doc/PREFERENCES.md)
+- [InApp Feed (Headless)](doc/INBOX.md)
