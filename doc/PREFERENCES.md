@@ -1,58 +1,74 @@
 # Preferences
 
-### Prerequisites
+Build a notification preference center in your iOS Swift app with SuprSend SDK methods to fetch, display, and update user channel and category opt-ins.
 
-- [Integration of SuprSend Swift SDK](../README.md#integration-steps)
-- [Configure preference categories](https://docs.suprsend.com/docs/user-preferences#setting-up-preference-categories) on the SuprSend dashboard
+### Pre-Requisites
 
-> **Tip:**
-> A working example can be found in
-> [`Example/SwiftExample/Screens/PreferenceScreen.swift`](https://github.com/suprsend/suprsend-swift-sdk/blob/main/Example/SwiftExample/Screens/PreferenceScreen.swift).
+- Integration of [iOS SDK](../README.md)
+
+- [Configure preference categories](https://docs.suprsend.com/docs/user-preferences#setting-up-preference-categories) on SuprSend dashboard
 
 ## Understanding preference structure
 
 This is how a typical preference page will look like:
 
-![Full preference page structure](https://mintcdn.com/suprsend/ysJyO3LOXwZ5L098/images/docs/full-pref-structure.png?fit=max&auto=format&n=ysJyO3LOXwZ5L098&q=85&s=46051ca09456c491a19ae6ddb0c45c4b)
+![Preference structure](https://mintcdn.com/suprsend/ysJyO3LOXwZ5L098/images/docs/full-pref-structure.png?fit=max&auto=format&n=ysJyO3LOXwZ5L098&q=85&s=46051ca09456c491a19ae6ddb0c45c4b)
 
-A preference page contains 2 sections:
+Preference Page contains 2 sections:
 
-1. Category-level preference settings
+1. Category-level preference settings (Sections)
+
    - [Sections](#11-sections)
+
    - [Categories](#12-categories-sections---sub-categories)
-   - [Category Channels](#13-category-channels-sections---sub-categories---channels)
-2. [Overall channel-level preferences](#2-overall-channel-preferences)
 
-![Category-level preference settings on mobile](https://mintcdn.com/suprsend/ysJyO3LOXwZ5L098/images/docs/mobile-preferences-1.png?fit=max&auto=format&n=ysJyO3LOXwZ5L098&q=85&s=bafabe25e611cd63e3a3b3ccce751f92)
+   - [Category Channel](#13-category-channels-sections---sub-categories---channels)
 
-![Overall channel-level preferences on mobile](https://mintcdn.com/suprsend/ysJyO3LOXwZ5L098/images/docs/mobile-preferences-2.png?fit=max&auto=format&n=ysJyO3LOXwZ5L098&q=85&s=fd37373b6f2f1d5ed5cd42500bc2e53d)
+     ![Category level preferences](https://mintcdn.com/suprsend/ysJyO3LOXwZ5L098/images/docs/mobile-preferences-1.png?fit=max&auto=format&n=ysJyO3LOXwZ5L098&q=85&s=bafabe25e611cd63e3a3b3ccce751f92)
+
+2. [Overall Channel-level preference](#2-overall-channel-preferences)
+
+![Overall channel level preferences](https://mintcdn.com/suprsend/ysJyO3LOXwZ5L098/images/docs/mobile-preferences-2.png?fit=max&auto=format&n=ysJyO3LOXwZ5L098&q=85&s=fd37373b6f2f1d5ed5cd42500bc2e53d)
 
 ### Preferences data structure
 
 ```swift
-public class PreferenceData: Codable {
-  public let sections: [Section]?
-  public let channelPreferences: [ChannelPreference]?
+// Preferences Types
+struct PreferenceData: Codable {
+  var sections: [Section]?
+  var channelPreferences: [ChannelPreference]?
 
   enum CodingKeys: String, CodingKey {
     case sections
     case channelPreferences = "channel_preferences"
   }
+
 }
 
-public class Section: Codable {
-  public let name: String?
-  public let description: String?
-  public let subcategories: [Category]?
+struct ChannelPreference: Codable {
+  var channel: String
+  var isRestricted: Bool
+
+  enum CodingKeys: String, CodingKey {
+    case channel
+    case isRestricted = "is_restricted"
+  }
+
 }
 
-public class Category: Codable {
-  public let name: String
-  public let category: String
-  public let description: String?
-  public var preference: PreferenceOptions
-  public let isEditable: Bool
-  public let channels: [CategoryChannel]?
+struct Section: Codable {
+  var name: String?
+  var description: String?
+  var subcategories: [Category]?
+}
+
+struct Category: Codable {
+  var name: String
+  var category: String
+  var description: String?
+  var preference: PreferenceOptions
+  var isEditable: Bool
+  var channels: [CategoryChannel]?
 
   enum CodingKeys: String, CodingKey {
     case name
@@ -62,45 +78,35 @@ public class Category: Codable {
     case isEditable = "is_editable"
     case channels
   }
+
 }
 
-public class CategoryChannel: Codable {
-  public let channel: String
-  public var preference: PreferenceOptions
-  public let isEditable: Bool
+struct CategoryChannel: Codable {
+  var channel: String
+  var preference: PreferenceOptions
+  var isEditable: Bool
 
   enum CodingKeys: String, CodingKey {
     case channel
     case preference
     case isEditable = "is_editable"
   }
+
 }
 
-public class ChannelPreference: Codable {
-  public let channel: String
-  public var isRestricted: Bool
-
-  enum CodingKeys: String, CodingKey {
-    case channel
-    case isRestricted = "is_restricted"
-  }
-}
-
-public enum PreferenceOptions: String, Codable {
+enum PreferenceOptions: String, Codable {
   case optIn = "opt_in"
   case optOut = "opt_out"
 }
 
-public enum ChannelLevelPreferenceOptions: String, Codable {
+enum ChannelLevelPreferenceOptions: String, Codable {
   case all = "all"
   case required = "required"
 }
 ```
 
-<details>
-<summary>Example response</summary>
-
 ```json
+// Example
 {
   "sections": [
     {
@@ -166,52 +172,42 @@ public enum ChannelLevelPreferenceOptions: String, Codable {
 }
 ```
 
-</details>
-
 ### 1.1 Sections
 
-This contains the name, description, and subcategories. Loop through the sections
-list and, for every section item, if a name and description are present show the
-heading; if a subcategories list is present, loop through it and show all
-subcategories under that section heading.
+This contains the name, description, and subcategories. We have to loop through the sections list and for every section item if there is a name and description present, then show the heading, and if a subcategories list is present, loop through that subcategories list and show all subcategories under that section heading.
 
-Subcategories can exist without sections, as the section is an optional field. In
-that case the section's name will not be available. For sections where the name
-is not present, you can directly show its subcategories list without showing a
-heading for the section in the UI.
+Subcategories can exist without sections as the section is an optional field. In that case, the section's name will not be available. For sections where the name is not present, you can directly show its subcategories list without showing Heading for the section in UI.
 
-![Preference sections on mobile](https://mintcdn.com/suprsend/ysJyO3LOXwZ5L098/images/docs/mobile-sections.png?fit=max&auto=format&n=ysJyO3LOXwZ5L098&q=85&s=ed2462d6b94cea40d797de056896509a)
+![Sections](https://mintcdn.com/suprsend/ysJyO3LOXwZ5L098/images/docs/mobile-sections.png?fit=max&auto=format&n=ysJyO3LOXwZ5L098&q=85&s=ed2462d6b94cea40d797de056896509a)
 
 ```swift
-public class Section: Codable {
-  public let name: String?
-  public let description: String?
-  public let subcategories: [Category]?
+struct Section: Codable {
+ var name: String?
+ var description: String?
+ var subcategories: [Category]?
 }
 ```
 
-| Property        | Description                                               |
-| --------------- | --------------------------------------------------------- |
-| `name`          | name of the section                                       |
-| `description`   | description of the section                                |
-| `subcategories` | data of all sub-categories to be shown inside the section |
+| Property      | Description                                               |
+| ------------- | --------------------------------------------------------- |
+| name          | name of the section                                       |
+| description   | description of the section                                |
+| subcategories | data of all sub-categories to be shown inside the section |
 
 ### 1.2 Categories (sections -> sub-categories)
 
-This is the place where the user sets their category-level preferences. While
-looping through the subcategories list, for every subcategory item show the name
-and description in the UI.
+This is the place where the user sets his category-level preferences. While looping through the subcategories list for every subcategory item, show the name and description in UI.
 
-![Preference categories on mobile](https://mintcdn.com/suprsend/ysJyO3LOXwZ5L098/images/docs/mobile-category.png?fit=max&auto=format&n=ysJyO3LOXwZ5L098&q=85&s=286bb93a230fccaa45ab9d9f0acd5eb8)
+![Categories](https://mintcdn.com/suprsend/ysJyO3LOXwZ5L098/images/docs/mobile-category.png?fit=max&auto=format&n=ysJyO3LOXwZ5L098&q=85&s=286bb93a230fccaa45ab9d9f0acd5eb8)
 
 ```swift
-public class Category: Codable {
-  public let name: String
-  public let category: String
-  public let description: String?
-  public var preference: PreferenceOptions
-  public let isEditable: Bool
-  public let channels: [CategoryChannel]?
+struct Category: Codable {
+ var name: String
+ var category: String
+ var description: String?
+ var preference: PreferenceOptions
+ var isEditable: Bool
+ var channels: [CategoryChannel]?
 
   enum CodingKeys: String, CodingKey {
     case name
@@ -224,104 +220,87 @@ public class Category: Codable {
 }
 ```
 
-| Property      | Description                                                                                                                                        |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `category`    | This key is the id of the category which is used while updating the preference.                                                                    |
-| `name`        | name of the category to be shown on the UI                                                                                                         |
-| `description` | description of the category to be shown on the UI                                                                                                  |
-| `preference`  | This key indicates if the category's preference switch is on or off. Get **optIn** when the switch is on and **optOut** when the switch is off.     |
-| `isEditable`  | Indicates if the preference switch button is disabled or not. If its value is `false` then the preference setting for that category can't be edited. |
-| `channels`    | data of all category channels to be shown below the sub-category. Loop through it to show checkboxes under every subcategory item.                  |
+| Property     | Description                                                                                                                                        |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| category     | This key is the id of the category which is used while updating the preference.                                                                    |
+| name         | name of the category to be shown on the UI                                                                                                         |
+| description  | description of the category to be shown on the UI                                                                                                  |
+| preference   | This key indicates if the category's preference switch is on or off. Get **OPT\_IN** when the switch is on and **OPT\_OUT** when the switch is off |
+| is\_editable | Indicates if the preference switch button is disabled or not. If its value is false then the preference setting for that category can't be edited  |
+| channels     | data of all category channels to be shown below the sub-category. Loop through it to show checkboxes under every subcategory item.                 |
 
 ### 1.3 Category channels (sections -> sub-categories -> channels)
 
-This contains a list of channels, the channel preference status and whether it's
-editable or not. While looping through the subcategory list, for every subcategory
-item loop through its channels list and for every channel show a channel-level
-checkbox.
+This contains a list of channels, channel preference status and whether it's editable or not. While looping through the subcategory list for every subcategory item we have to loop through its channels list and for every channel to show channel level checkbox.
 
-![Category channels on mobile](https://mintcdn.com/suprsend/ysJyO3LOXwZ5L098/images/docs/mobile-category-channels.png?fit=max&auto=format&n=ysJyO3LOXwZ5L098&q=85&s=489568f7581a820518898ee90300df01)
+![Category channels](https://mintcdn.com/suprsend/ysJyO3LOXwZ5L098/images/docs/mobile-category-channels.png?fit=max&auto=format&n=ysJyO3LOXwZ5L098&q=85&s=489568f7581a820518898ee90300df01)
 
 ```swift
-public class CategoryChannel: Codable {
-  public let channel: String
-  public var preference: PreferenceOptions
-  public let isEditable: Bool
+struct CategoryChannel: Codable {
+ var channel: String
+ var preference: PreferenceOptions
+ var isEditable: Bool
 
   enum CodingKeys: String, CodingKey {
     case channel
     case preference
     case isEditable = "is_editable"
   }
+
 }
 ```
 
 | Property     | Description                                                                                                                                 |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `channel`    | name of the channel to be shown on UI. The same key will be used as id of the channel while updating the preference.                        |
-| `preference` | This key indicates if the channel's preference switch is on or off. Get **optIn** when the switch is on and **optOut** when the switch is off. |
-| `isEditable` | Indicates if the preference checkbox is disabled or not. If its value is `false` then the preference setting for that channel can't be edited. |
+| channel      | name of the channel to be shown on UI. The same key will be used as id of the channel while updating the preference.                        |
+| preference   | This key indicates if the channel's preference switch is on or off. Get OPT\_IN when the switch is on and OPT\_OUT when the switch is off   |
+| is\_editable | Indicates if the preference checkbox is disabled or not. If its value is false then the preference setting for that channel can't be edited |
 
 ### 2. Overall channel preferences
 
-It's a list of all channel-level preferences. Loop through the list and for each
-item show the UI as given in the below image.
+It's a list of all channel-level preferences. We have to loop through the list and for each item, show the UI as given in the below image.
 
-![Overall channel preferences on mobile](https://mintcdn.com/suprsend/ysJyO3LOXwZ5L098/images/docs/mobile-preferences-2.png?fit=max&auto=format&n=ysJyO3LOXwZ5L098&q=85&s=fd37373b6f2f1d5ed5cd42500bc2e53d)
+![Overall channel preferences](https://mintcdn.com/suprsend/ysJyO3LOXwZ5L098/images/docs/mobile-preferences-2.png?fit=max&auto=format&n=ysJyO3LOXwZ5L098&q=85&s=fd37373b6f2f1d5ed5cd42500bc2e53d)
 
 ```swift
-public class ChannelPreference: Codable {
-  public let channel: String
-  public var isRestricted: Bool
+struct ChannelPreference: Codable {
+  var channel: String
+  var isRestricted: Bool
 
   enum CodingKeys: String, CodingKey {
     case channel
     case isRestricted = "is_restricted"
   }
+
 }
 ```
 
 | Property       | Description                                                                                                                                                                                                                                                                                  |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `channel`      | name of the channel to be shown on UI. The same key will be used as id of the channel while updating the preference.                                                                                                                                                                         |
-| `isRestricted` | This key indicates the restriction level of the channel. If restricted, notifications will only be sent in the category where this channel is added as mandatory in preference category settings. **true** means the Required radio button is selected. **false** means All is selected. |
+| channel        | name of the channel to be shown on UI. The same key will be used as id of the channel while updating the preference.                                                                                                                                                                         |
+| is\_restricted | This key indicates the restriction level of channel. If restricted, notification will only be sent in the category where this channel is added as mandatory in preference category settings. **True** means Required radio button is selected. **False** means All radio button is selected. |
 
 ## Integration
 
-> **Note**
-> All the methods below are on the same `Preferences` instance and the update
-> methods act on the data cached by `getPreferences`. Use one instance
-> consistently — `SuprSend.shared.preferences` and
-> `SuprSend.shared.user.preferences` are separate instances with separate
-> caches, so calling `getPreferences` on one and updating on the other returns a
-> validation error.
-
 ### Get preferences data
 
-Use this method to get preferences data and create the preferences UI by
-following the above sections. This method should be called first, before any
-update preference methods.
+Use this method to get preferences data and create the preferences UI by following the above sections. This method should be called first before any update preference methods.
 
 ```swift
-await SuprSend.shared.preferences.getPreferences(
-  args: Preferences.Args(tenantId: "tenant-id", tags: .string("tag"), locale: "es")
-)
+await SuprSend.shared.preferences.getPreferences(args: Preferences.Args(tenantId: "", tags: "", locale: "")) 
 ```
 
-| Argument (optional)  | Description                                                                                                                                                                                                                                                                                                                                                            |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tenantId`           | Tenant identifier for loading per-tenant preferences. Defaults to the tenant set on the client during [identify](../README.md#step-2-authenticate-user) or [changeTenant](../README.md#change-active-tenant).                                                                                                                                                            |
-| `showOptOutChannels` | Whether opted-out channels are included in the response. Defaults to `true`.                                                                                                                                                                                                                                                                                            |
-| `tags`               | Filter categories by tags — `.string(String)` or `.dictionary([String: Any])`. Used to filter preference categories based on the user's roles, department or teams (see [Tags](https://docs.suprsend.com/docs/notification-category#tags)).                                                                                                                              |
-| `locale`             | Locale code (for example, `es`, `fr`, `de`, `es-AR`) to fetch preference translations in the user's locale. When provided, category names and descriptions will be returned in the specified locale. If a translation is missing for the requested locale, the system falls back in this order: `locale-region` (e.g. `es-AR`) → `locale` (e.g. `es`) → `en` (always available). |
+| Argument (optional) | Description                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tenantId`          | Tenant identifier for loading per-tenant preferences                                                                                                                                                                                                                                                                                                                                                                 |
+| `tags`              | Filter categories by tags. Used to filter preference categories based on user's roles, department or teams. (see [Tags](https://docs.suprsend.com/docs/notification-category#tags))                                                                                                                           |
+| `locale`            | Locale code (for example, `es`, `fr`, `de`, `es-AR`) to fetch preference translations in user's locale. When provided, category names and descriptions will be returned in the specified locale. If a translation is missing for the requested locale, the system automatically falls back in this order: `locale-region` (for example, `es-AR`) → `locale` (for example, `es`) → `en` (English - always available). |
 
 **Returns:** `async -> PreferenceAPIResponse`
 
 ### Update channel preference in category
 
-Calling this method will opt-in/opt-out the user from that category-level
-channel. When the category's channel checkbox is editable and the user clicks on
-the checkbox you can call this method.
+Calling this method will opt-in/opt-out users from that category-level channel. When the category's channel checkbox is editable and the user clicks on the checkbox you can call this method.
 
 ```swift
 await SuprSend.shared.preferences.updateChannelPreferenceInCategory(
@@ -330,9 +309,9 @@ await SuprSend.shared.preferences.updateChannelPreferenceInCategory(
   category: "category"
 )
 
-public enum PreferenceOptions: String, Codable {
-  case optIn = "opt_in"
-  case optOut = "opt_out"
+enum PreferenceOptions: String, Codable {
+   case optIn = "opt_in"
+   case optOut = "opt_out"
 }
 ```
 
@@ -342,68 +321,53 @@ public enum PreferenceOptions: String, Codable {
 
 ### Update category preference
 
-This is the category-level preference changing method. Calling this method will
-opt-in/opt-out the user from that category. When the category is editable and the
-switch is toggled you can call this method.
+This is category level preference changing method. Calling this method will opt-in/opt-out user from that category. When the category is editable and the switch is toggled you can call this method.
 
 ```swift
-SuprSend.shared.preferences.updateCategoryPreference(
-  category: "category_value",
-  preference: PreferenceOptions
-)
+await SuprSend.shared.preferences.updateCategoryPreference(category: "category_value", preference: PreferenceOptions)
+
+enum PreferenceOptions: String, Codable {
+  case optIn = "opt_in"
+  case optOut = "opt_out"
+}
 ```
 
-**Returns:** `PreferenceAPIResponse` (returns the optimistic result synchronously;
-the network call happens in the background — listen to the
-[event listeners](#event-listeners) for the API result)
+**Returns:** `async -> PreferenceAPIResponse`
 
 ### Update overall channel preference
 
-This method updates the channel-level preference of the user.
+This method updated the channel-level preference of the user.
 
 ```swift
-SuprSend.shared.preferences.updateOverallChannelPreference(
+await SuprSend.shared.preferences.updateOverallChannelPreference(
   channel: "channel",
   preference: ChannelLevelPreferenceOptions
 )
 
-public enum ChannelLevelPreferenceOptions: String, Codable {
-  case all = "all"
-  case required = "required"
+enum ChannelLevelPreferenceOptions: String, Codable {
+ case all = "all"
+ case required = "required"
 }
 ```
 
-**Returns:** `PreferenceAPIResponse` (optimistic; see
-[event listeners](#event-listeners))
+**Returns:** `async -> PreferenceAPIResponse`
 
 ![Update overall channel preference](https://mintcdn.com/suprsend/ysJyO3LOXwZ5L098/images/docs/mobile-overall-update-channels.png?fit=max&auto=format&n=ysJyO3LOXwZ5L098&q=85&s=43fae7ed01bbb0ddde7ca1ae7fe425f4)
 
 ### Event listeners
 
-All preference update APIs are optimistic updates. The actual API call happens in
-the background with a 1 second debounce. Since it's a background task, the SDK
-provides event listeners to get updated preference data based on the API call
-status. Listen to these event listeners and update the UI accordingly.
+All preferences update api's are optimistic updates. Actual API call will happen in background with 1 second debounce. Since its a background task SDK provides event listeners to get updated preference data based on API call status. Listen to this event listeners and update the UI accordingly.
 
 ```swift
-SuprSend.shared.emitter.on(.preferencesUpdated) { response in
+SuprSend.shared.emitter.on(.preferencesUpdated) { data in
   // update local store so that UI is updated with latest data
 }
 
-SuprSend.shared.emitter.on(.preferencesError) { response in
+SuprSend.shared.emitter.on(.preferencesError) { error in
   // show error toast to user
 }
 ```
 
-### Other methods
+## Example
 
-```swift
-// Paginated list of categories, without sections.
-await SuprSend.shared.preferences.getCategories(args: Preferences.CategoryArgs(limit: 20, offset: 0))
-
-// A single category by its id.
-await SuprSend.shared.preferences.getCategory(category: "category_value")
-
-// Only the overall channel-level preferences.
-await SuprSend.shared.preferences.getOverallChannelPreferences()
-```
+Preferences UI example code: [PreferencesView.swift](https://github.com/suprsend/suprsend-swift-sdk/blob/main/Example/SuprSendSwiftExample-iOS/Views/Profile/Preferences/PreferencesView.swift) and [PreferenceModel.swift](https://github.com/suprsend/suprsend-swift-sdk/blob/main/Example/SuprSendSwiftExample-iOS/Model/PreferenceModel.swift)
