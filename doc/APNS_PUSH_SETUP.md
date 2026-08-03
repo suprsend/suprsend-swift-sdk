@@ -150,7 +150,7 @@ In second dialog box, select your Notification Service target from dropdown and 
 
 ```ruby
 target '<your_notification_service_name>' do
-  pod 'SuprSendSwift', :git => 'https://github.com/suprsend/suprsend-swift-sdk.git', :tag => '1.1.0'
+  pod 'SuprSendSwift', :git => 'https://github.com/suprsend/suprsend-swift-sdk.git', :tag => '2.0.0'
 end
 ```
 
