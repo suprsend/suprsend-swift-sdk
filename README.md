@@ -7,6 +7,8 @@ Install and initialize the SuprSend iOS Swift SDK in your mobile app to enable p
 >
 > This documentation is for new version of iOS sdk. If you are using older version of sdk `SuprSendSdk` please refer [documentation](https://github.com/suprsend/SuprSend-iOS-SDK/tree/main/documentation)
 
+Already using the SDK on `1.x`? See [Migrating to v2 from v1](doc/MIGRATION_GUIDE.md).
+
 ## Installation
 
 There are two ways you can install SuprSend SDK into your app:
@@ -24,7 +26,7 @@ In second dialog box, select your project's target from dropdown and click `Add 
 **For SDK version `1.1.0` onwards**, add the SDK to your Podfile using the GitHub source and run `pod install`:
 
 ```ruby
-pod 'SuprSendSwift', :git => 'https://github.com/suprsend/suprsend-swift-sdk.git', :tag => '1.1.0'
+pod 'SuprSendSwift', :git => 'https://github.com/suprsend/suprsend-swift-sdk.git', :tag => '2.0.0'
 ```
 
 **For SDK versions till `1.0.1`**, add the SuprSendSwift SDK to your Podfile as `pod "SuprSendSwift"` and run `pod install` to install the SDK.
