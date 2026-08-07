@@ -7,6 +7,7 @@
 
 import Foundation
 import Testing
+import Foundation
 @testable import SuprSend
 
 struct UserPropertyTests {

@@ -16,12 +16,28 @@ public let shared = SuprSendClient.shared
 /// Additional configurations
 /// - Parameters:
 ///   - host: Host URL
+///   - appInfo: App name/version to advertise in the user-agent headers. When
+///     `nil`, values are auto-detected from `Bundle.main`.
+///   - clientUserAgent: Per-field override of the user-agent payload. Useful
+///     for wrappers (Flutter/RN) that want to identify themselves.
 public class Options: NSObject {
     /// Host URL
     public let host: String?
-    
-    public init(host: String?) {
+
+    /// App info merged into the user-agent payload.
+    public let appInfo: AppInfo?
+
+    /// Per-field override of the user-agent payload.
+    public let clientUserAgent: ClientUserAgentConfig?
+
+    public init(
+        host: String? = nil,
+        appInfo: AppInfo? = nil,
+        clientUserAgent: ClientUserAgentConfig? = nil
+    ) {
         self.host = host
+        self.appInfo = appInfo
+        self.clientUserAgent = clientUserAgent
     }
 }
 
@@ -33,11 +49,33 @@ public class SuprSendClient: NSObject {
 
     var host: String
     var publicKey: String
-    private(set) var distinctID: String?
+    public private(set) var distinctID: String?
+
+    /// The tenant the SDK currently operates within, sent as `tenant_id` on
+    /// every preferences request and applied to newly-initialised feeds that
+    /// don't specify their own tenant.
+    ///
+    /// This is *session* state, not build config: set it at login via
+    /// ``identify(distinctID:userToken:tenantId:options:)`` and switch it at
+    /// runtime via ``changeTenant(tenantId:)``. A per-call `tenantId` (on
+    /// ``track(event:properties:tenantId:)``, ``Preferences/Args`` or
+    /// ``IFeedOptions``) always overrides this value.
+    public private(set) var tenantId: String?
+
     var deviceToken: String?
     private(set) var userToken: String?
     private var apiClient: APIClient?
     private(set) var authenticateOptions: AuthenticateOptions?
+
+    /// Fully-resolved user-agent payload sent on every request as JSON in the
+    /// `X-Suprsend-Client-User-Agent` header.
+    private(set) var clientUserAgent: ClientUserAgentConfig
+    /// Compact string form sent on every request in the `X-Suprsend-User-Agent`
+    /// header.
+    private(set) var userAgent: String
+    /// Pre-encoded JSON form of ``clientUserAgent`` so `APIClient` doesn't
+    /// re-encode on every request.
+    private(set) var clientUserAgentJSON: String
 
     /// User instance
     public private(set) lazy var user = User(config: self)
@@ -47,6 +85,9 @@ public class SuprSendClient: NSObject {
     
     /// Preferences instance
     public private(set) lazy var preferences = Preferences(config: self)
+    
+    /// Feeds instance
+    public private(set) lazy var feeds = FeedsFactory(config: self)
 
     public let emitter = Emitter()
     private var userTokenExpirationTimer: Timer?
@@ -63,6 +104,13 @@ public class SuprSendClient: NSObject {
     ) {
         self.publicKey = publicKey
         self.host = options?.host ?? Constants.defaultHost
+        let resolvedUA = buildClientUserAgent(
+            appInfo: options?.appInfo,
+            override: options?.clientUserAgent
+        )
+        self.clientUserAgent = resolvedUA
+        self.userAgent = buildUserAgent(resolvedUA)
+        self.clientUserAgentJSON = encodeClientUserAgent(resolvedUA)
     }
 
     @objc public func configure(publicKey: String,
@@ -72,6 +120,18 @@ public class SuprSendClient: NSObject {
         self.host = options?.host ?? Constants.defaultHost
         self.urlDelegate = urlDelegate
         self.push.delegate = urlDelegate as? SuprSendPushNotificationDelegate
+        let resolvedUA = buildClientUserAgent(
+            appInfo: options?.appInfo,
+            override: options?.clientUserAgent
+        )
+        self.clientUserAgent = resolvedUA
+        self.userAgent = buildUserAgent(resolvedUA)
+        self.clientUserAgentJSON = encodeClientUserAgent(resolvedUA)
+
+        // Now that the public key is set, retry any events queued before it was
+        // available — e.g. a notification tap handled on a cold (killed-state)
+        // launch, where this configure() runs after the native push callback.
+        self.push.flushPendingEvents()
     }
     
     @objc public func setDeepLinkDelegate(_ urlDelegate: SuprSendDeepLinkDelegate) {
@@ -128,11 +188,16 @@ public class SuprSendClient: NSObject {
     /// - Parameters:
     ///   - distinctID: Distinct ID for the device
     ///   - userToken: JWT token for the user
+    ///   - tenantId: Tenant the user is logging into. Stored as the global
+    ///     ``tenantId`` and applied to subsequent preferences/feed calls. When
+    ///     the user's token scopes multiple tenants, switch between them at
+    ///     runtime with ``changeTenant(tenantId:)`` — no re-identify needed.
     ///   - options: Authenticate Options
     /// - Returns: Respnose from the API call
     public func identify(
         distinctID: String,
         userToken: String? = nil,
+        tenantId: String? = nil,
         options: AuthenticateOptions? = nil
     ) async -> APIResponse {
 
@@ -144,6 +209,14 @@ public class SuprSendClient: NSObject {
                     message: "User already loggedin, reset current user to login new user"
                 )
             )
+        }
+
+        // Set the tenant for this session before any request goes out. Placed
+        // after the "other user" guard so a rejected identify doesn't mutate
+        // the current user's tenant. `nil` (e.g. token-refresh re-identify)
+        // leaves the existing tenant untouched.
+        if let tenantId {
+            self.tenantId = tenantId
         }
 
         // updating usertoken for existing user
@@ -191,7 +264,8 @@ public class SuprSendClient: NSObject {
                     insertID: UUID().uuidString,
                     time: Date.now.timeIntervalSince1970,
                     distinctID: distinctID,
-                    properties: .init(["$identified_id": distinctID])
+                    properties: .init(["$identified_id": distinctID]),
+                    tenantId: self.tenantId
                 )
             )
         )
@@ -216,12 +290,38 @@ public class SuprSendClient: NSObject {
         (distinctID != nil) && (checkUserToken ? (userToken != nil) : true)
     }
 
+    /// Switch the active tenant after login.
+    ///
+    /// Intended for users whose token scopes multiple tenants (a `tenant_id`
+    /// array): identify once, then call this to move between them without
+    /// resetting the session. Updates the global ``tenantId`` used by
+    /// subsequent preferences requests and newly-initialised feeds.
+    ///
+    /// - Note: Already-running feed instances keep the tenant they were
+    ///   initialised with — re-initialise a feed (via ``feeds``) to have it
+    ///   reflect the new tenant. Re-fetch preferences (``Preferences/getPreferences(args:)``)
+    ///   to load the new tenant's data.
+    /// - Parameter tenantId: The tenant to switch to.
+    @objc public func changeTenant(tenantId: String) {
+        if !isIdentified(checkUserToken: false) {
+            logger.warning("[SuprSend]: changeTenant called before identify. Tenant will apply once a user is identified.")
+        }
+        self.tenantId = tenantId
+    }
+
     /// Track event with given properties
     /// - Parameters:
     ///   - event: The Event name
     ///   - properties: Properties for the event
+    ///   - tenantId: Tenant to attribute this single event to. When `nil` the
+    ///     global ``tenantId`` is used. Scoping one event this way does not
+    ///     change the session tenant — use ``changeTenant(tenantId:)`` for that.
     /// - Returns: Response from the API call
-    public func track(event: String, properties: EventProperty? = nil) async -> APIResponse {
+    public func track(
+        event: String,
+        properties: EventProperty? = nil,
+        tenantId: String? = nil
+    ) async -> APIResponse {
         let validatedProperties: EventProperty
         if let properties {
             validatedProperties = Utils.shared.validateObjData(data: properties)
@@ -234,12 +334,13 @@ public class SuprSendClient: NSObject {
             insertID: UUID().uuidString,
             time: Date().timeIntervalSince1970,
             distinctID: distinctID ?? String(),
-            properties: allProperties(merging: validatedProperties).convertToProperty()
+            properties: validatedProperties.convertToProperty(),
+            tenantId: tenantId ?? self.tenantId
         )
 
         return await eventApi(payload: .init(event))
     }
-    
+
     func trackPublic(event: String, properties: EventProperty?) async -> APIResponse {
         let validatedProperties: EventProperty
         if let properties {
@@ -247,13 +348,19 @@ public class SuprSendClient: NSObject {
         } else {
             validatedProperties = .init()
         }
-        
+
+        // Public notification events ($notification_clicked/_delivered/_dismiss)
+        // omit tenant_id — the tenant is resolved server-side from the
+        // notification id, and this path can run unidentified (Notification
+        // Service Extension / cold start) where no reliable tenant exists.
         let event = Event(
             event: event,
             insertID: UUID().uuidString,
             time: Date().timeIntervalSince1970,
             distinctID: distinctID ?? String(),
-            properties: allProperties(merging: validatedProperties).convertToProperty()
+            properties: validatedProperties.convertToProperty(),
+            tenantId: nil,
+            emitsTenant: false
         )
         let response: APIResponse = await publicClient().publicRequest(reqData: .init(path: "v2/event", payload: .init(event), type: .post))
         return response
@@ -273,15 +380,16 @@ public class SuprSendClient: NSObject {
         if expiresOn > now {
             let timeDiff = expiresOn - now - refreshBefore
 
-            if userTokenExpirationTimer != nil {
-                userTokenExpirationTimer?.invalidate()
-                userTokenExpirationTimer = nil
-            }
-            
-            userTokenExpirationTimer = Timer.scheduledTimer(
-                withTimeInterval: timeDiff, repeats: false
-            ) { _ in
-                self.timerCallback(refreshUserToken: refreshUserToken)
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.userTokenExpirationTimer?.invalidate()
+                self.userTokenExpirationTimer = nil
+
+                self.userTokenExpirationTimer = Timer.scheduledTimer(
+                    withTimeInterval: timeDiff, repeats: false
+                ) { _ in
+                    self.timerCallback(refreshUserToken: refreshUserToken)
+                }
             }
         }
     }
@@ -342,12 +450,18 @@ public class SuprSendClient: NSObject {
         self.apiClient = nil
         self.distinctID = nil
         self.userToken = nil
+        self.tenantId = nil
 
         Utils.shared.removeLocalStorageData(key: Constants.authenticatedDistinctID)
 
-        if userTokenExpirationTimer != nil {
-            userTokenExpirationTimer?.invalidate()
-            userTokenExpirationTimer = nil
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.userTokenExpirationTimer?.invalidate()
+            self.userTokenExpirationTimer = nil
+        }
+
+        if !feeds.feedInstances.isEmpty {
+            feeds.removeAll()
         }
 
         return .success()
@@ -355,39 +469,5 @@ public class SuprSendClient: NSObject {
 
     @objc public func enableLogging() {
         logger.enableLogging()
-    }
-}
-
-extension SuprSendClient {
-    /// Get the SDK version.
-    private var sdkVersion: String {
-        (Bundle(for: SuprSendClient.self).infoDictionary as? [String: String])?[
-            "CFBundleShortVersionString"] ?? "2.0.0"
-    }
-
-    /// Get the default properties for an event.
-    /// - Returns: The default properties.
-    private func defaultProperties() -> EventProperty {
-        [
-            "$os": "iOS",
-            "$os_version": "17.0",
-            "$sdk_type": "iOS Native",
-            "$device_id": "DEVICE_ID",
-            "$sdk_version": sdkVersion,
-        ]
-    }
-
-    /// Get the all properties for an event, merging with default properties.
-    /// - Parameters:
-    ///   - userProperties: The user-provided properties.
-    /// - Returns: The merged properties.
-    private func allProperties(merging userProperties: EventProperty?) -> EventProperty {
-        if let userProperties {
-            defaultProperties().merging(userProperties) { value1, _ in
-                value1
-            }
-        } else {
-            defaultProperties()
-        }
     }
 }

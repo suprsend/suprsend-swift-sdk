@@ -8,7 +8,7 @@
 import Foundation
 import UserNotifications
 #if os(iOS) || os(watchOS) || os(tvOS)
-import UIKit
+import UIKit.UIApplication
 #endif
 
 @objc public protocol SuprSendPushNotificationDelegate: AnyObject {
@@ -29,6 +29,13 @@ public class Push {
     init(config: SuprSendClient) {
         self.config = config
         self.queue = PushQueue(config: config)
+    }
+
+    /// Retries any persisted/pending push events. Invoked from `configure()` so
+    /// events queued before the public key was set (e.g. a notification tap from
+    /// a killed state) are sent once the key becomes available.
+    func flushPendingEvents() {
+        queue.flushPendingEvents()
     }
 
     /// Retrieves the push subscription, if available.
@@ -67,13 +74,17 @@ public class Push {
     /// Retrieves the current notification permission status.
     /// - Returns: The current notification permission status.
     public func notificationPermission() async -> UNAuthorizationStatus {
-        await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        if UIApplication.shared.delegate != nil {
+            await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        } else {
+            UNAuthorizationStatus.notDetermined
+        }
     }
 
     /// Registers for push notifications.
     /// - Note: This method currently returns a placeholder response and should be implemented to retrieve the actual device token.
     /// - Returns: A placeholder API response indicating success.
-    func registerPush() async throws -> APIResponse {
+    public func registerPush() async throws -> APIResponse {
         let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [
             .alert, .sound, .badge,
         ])
@@ -133,9 +144,11 @@ extension Push {
             let url = URL(string: actionURL) {
             let handleLink = config.urlDelegate?.shouldHandleSuprSendDeepLink(url) ?? true
             if handleLink {
+#if os(iOS) || os(watchOS) || os(tvOS)
                 DispatchQueue.main.async {
                     UIApplication.shared.open(url)
                 }
+#endif
             }
         }
     }

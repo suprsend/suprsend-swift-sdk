@@ -5,30 +5,43 @@
 //  Created by Ram Suthar on 05/09/24.
 //
 
-import Combine
 import Foundation
 
 /// A class representing preferences.
 /// This class provides methods for getting and updating user's preferences data.
 public class Preferences {
     
-    /// A struct representing arguments for getting preferences.
-    /// The `tenantId` parameter is used to specify the tenant ID when making API requests. If not provided, it defaults to `nil`.
-    /// The `showOptOutChannels` parameter controls whether to show opt-out channels in the response. It defaults to `true`.
+    /// A struct representing arguments for getting/updating preferences.
+    ///
+    /// All fields are optional. When ``showOptOutChannels`` is `nil` it is
+    /// treated as `true` at the request layer — this distinguishes "caller did
+    /// not specify" from "caller explicitly said `false`", which matches the
+    /// web SDK's `args?.showOptOutChannels === false ? false : true` rule.
     public struct Args {
         /// The tenant ID to use when making API requests. Defaults to `nil`.
         public let tenantId: String?
 
-        /// Whether to show opt-out channels in the response. Defaults to `true`.
-        public let showOptOutChannels: Bool
-        
-        /// Arguments for getting preferences.
-        /// - Parameters:
-        ///   - tenantId: The `tenantId` parameter is used to specify the tenant ID when making API requests. If not provided, it defaults to `nil`.
-        ///   - showOptOutChannels: The `showOptOutChannels` parameter controls whether to show opt-out channels in the response. It defaults to `true`.
-        public init(tenantId: String? = nil, showOptOutChannels: Bool = true) {
+        /// Whether to show opt-out channels in the response. `nil` means "not
+        /// specified" — the SDK falls back to the value stored from the most
+        /// recent ``Preferences/getPreferences(args:)`` call, or `true`.
+        public let showOptOutChannels: Bool?
+
+        /// Tags filter applied when fetching preferences.
+        public let tags: PreferenceTags?
+
+        /// Locale to use when fetching preference text. Defaults to `nil`.
+        public let locale: String?
+
+        public init(
+            tenantId: String? = nil,
+            showOptOutChannels: Bool? = nil,
+            tags: PreferenceTags? = nil,
+            locale: String? = nil
+        ) {
             self.tenantId = tenantId
             self.showOptOutChannels = showOptOutChannels
+            self.tags = tags
+            self.locale = locale
         }
     }
 
@@ -37,29 +50,34 @@ public class Preferences {
         /// The tenant ID to use when making API requests. Defaults to `nil`.
         public let tenantId: String?
 
-        /// Whether to show opt-out channels in the response. Defaults to `true`.
-        public let showOptOutChannels: Bool
+        /// Whether to show opt-out channels in the response. `nil` means "not
+        /// specified" — treated as `true` at the request layer.
+        public let showOptOutChannels: Bool?
+
+        /// Tags filter applied when fetching categories.
+        public let tags: PreferenceTags?
+
+        /// Locale to use when fetching category text. Defaults to `nil`.
+        public let locale: String?
 
         /// The maximum number of categories to return. Defaults to `nil`.
         public let limit: Int?
 
         /// The offset at which to start returning categories. Defaults to `nil`.
         public let offset: Int?
-        
-        /// Arguments for getting categories.
-        /// - Parameters:
-        ///   - tenantId: The tenant ID to use when making API requests. Defaults to `nil`.
-        ///   - showOptOutChannels: Whether to show opt-out channels in the response. Defaults to `true`.
-        ///   - limit: The maximum number of categories to return. Defaults to `nil`.
-        ///   - offset: The offset at which to start returning categories. Defaults to `nil`.
+
         public init(
             tenantId: String? = nil,
-            showOptOutChannels: Bool = true,
+            showOptOutChannels: Bool? = nil,
+            tags: PreferenceTags? = nil,
+            locale: String? = nil,
             limit: Int? = nil,
             offset: Int? = nil
         ) {
             self.tenantId = tenantId
             self.showOptOutChannels = showOptOutChannels
+            self.tags = tags
+            self.locale = locale
             self.limit = limit
             self.offset = offset
         }
@@ -76,11 +94,26 @@ public class Preferences {
         let args: Args?
     }
 
-    private let debouncedUpdateCategoryPreferences = PassthroughSubject<
-        UpdateCategoryParams, Never
-    >()
-    private let debouncedUpdateChannelPreferences = PassthroughSubject<ChannelRequestPayload, Never>()
-    private var cancellables = Set<AnyCancellable>()
+    struct UpdateChannelParams {
+        let body: ChannelRequestPayload
+        let args: Args?
+    }
+
+    /// Per-category debounce. Mirrors the web SDK's `debounceByType(_, 1000ms)`
+    /// keyed by category — rapid toggles to the *same* category coalesce into
+    /// one PATCH; toggles across *different* categories each fire their own
+    /// PATCH.
+    private let categoryPreferenceDebouncer = KeyedDebouncer<UpdateCategoryParams>(
+        delayNanoseconds: Preferences.debounceDelayNanoseconds
+    )
+
+    /// Per-channel debounce for channel-level (`channel_preference`) updates.
+    private let channelPreferenceDebouncer = KeyedDebouncer<UpdateChannelParams>(
+        delayNanoseconds: Preferences.debounceDelayNanoseconds
+    )
+
+    /// Debounce window in nanoseconds. Matches the web SDK's 1000 ms.
+    private static let debounceDelayNanoseconds: UInt64 = 1_000_000_000
 
     /// The current preference data.
     var data: PreferenceData? {
@@ -95,36 +128,30 @@ public class Preferences {
     init(config: SuprSendClient) {
         self.config = config
 
-        debouncedUpdateCategoryPreferences
-            .debounce(for: .seconds(0.5), scheduler: RunLoop.main)
-            .sink { [weak self] params in
-                Task { [weak self] in
-                    await self?._updateCategoryPreferences(
-                        category: params.category,
-                        body: params.body,
-                        subCategory: params.subCategory,
-                        args: params.args
-                    )
-                }
-            }
-            .store(in: &cancellables)
+        categoryPreferenceDebouncer.action = { [weak self] params in
+            _ = await self?._updateCategoryPreferences(
+                category: params.category,
+                body: params.body,
+                subCategory: params.subCategory,
+                args: params.args
+            )
+        }
 
-        debouncedUpdateChannelPreferences
-            .debounce(for: .seconds(0.5), scheduler: RunLoop.main)
-            .sink { [weak self] body in
-                Task { [weak self] in
-                    await self?._updateChannelPreferences(body: body)
-                }
-            }
-            .store(in: &cancellables)
+        channelPreferenceDebouncer.action = { [weak self] params in
+            _ = await self?._updateChannelPreferences(body: params.body, args: params.args)
+        }
     }
 
     /// Returns a URL for making API requests.
     /// - Parameters:
     ///   - path: The path to append to the base URL. Defaults to `nil`.
     ///   - qp: Query parameters to include in the request. Defaults to an empty dictionary.
-    func getUrlpath(path: String, qp: [String: Any?]? = nil) -> URL {
-        let urlPath = "v2/subscriber/\(config.distinctID?.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String())/\(path)/"
+    func getUrlpath(path: String? = nil, qp: [String: Any?]? = nil) -> URL {
+        let distinctID = config.distinctID?.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String()
+        var urlPath = "v1/user/\(distinctID)/preference/"
+        if let path, !path.isEmpty {
+            urlPath += "\(path)/"
+        }
         let queryParams = qp?.compactMap({ item in
             if let value = item.value {
                 URLQueryItem(name: item.key, value: String(describing: value))
@@ -140,18 +167,62 @@ public class Preferences {
         return urlComponents.url!
     }
 
+    /// Encodes a ``PreferenceTags`` value into the form expected on the wire.
+    /// String tags are passed through as-is; dictionary tags are serialised as
+    /// JSON. Mirrors the web SDK's `validateQueryParams` branch on `object`.
+    private func encodeTags(_ tags: PreferenceTags?) -> String? {
+        guard let tags else { return nil }
+        switch tags {
+        case .string(let value):
+            return value
+        case .dictionary(let dict):
+            guard
+                JSONSerialization.isValidJSONObject(dict),
+                let data = try? JSONSerialization.data(withJSONObject: dict, options: [.sortedKeys]),
+                let json = String(data: data, encoding: .utf8)
+            else { return nil }
+            return json
+        }
+    }
+
+    /// Resolves the effective `show_opt_out_channels` query value using the
+    /// web SDK priority: explicit arg → value stored from the last
+    /// ``getPreferences(args:)`` call → `true`.
+    private func resolveShowOptOutChannels(_ args: Args?) -> Bool {
+        args?.showOptOutChannels
+            ?? preferenceArgs?.showOptOutChannels
+            ?? true
+    }
+
+    /// Captures the effective ``Args`` for an update call by folding the
+    /// caller-supplied ``Args`` over the stored ``preferenceArgs`` (set by the
+    /// last ``getPreferences(args:)`` call). This snapshot is what reaches the
+    /// PATCH URL after debouncing, so the URL reflects intent at call-time
+    /// rather than whatever the stored args happen to be when the debouncer
+    /// fires.
+    private func resolvedArgs(_ args: Args?, showOptOutChannels: Bool) -> Args {
+        Args(
+            tenantId: args?.tenantId ?? preferenceArgs?.tenantId ?? config.tenantId,
+            showOptOutChannels: showOptOutChannels,
+            tags: args?.tags ?? preferenceArgs?.tags,
+            locale: args?.locale ?? preferenceArgs?.locale
+        )
+    }
+
     /// Used to get user's whole preferences data.
     /// - Parameters:
     ///   - args: Arguments for the request. Defaults to `nil`.
     public func getPreferences(args: Args? = nil) async -> PreferenceAPIResponse {
 
         let queryParams: [String: Any?] = [
-            "tenant_id": args?.tenantId,
+            "tenant_id": args?.tenantId ?? config.tenantId,
             "show_opt_out_channels": args?.showOptOutChannels ?? true,
+            "tags": encodeTags(args?.tags),
+            "locale": args?.locale,
         ]
         preferenceArgs = args
 
-        let path = getUrlpath(path: "full_preference", qp: queryParams)
+        let path = getUrlpath(qp: queryParams)
 
         let response: PreferenceAPIResponse = await config.client().request(
             reqData: .init(
@@ -173,8 +244,10 @@ public class Preferences {
     ///   - args: Arguments for the request. Defaults to `nil`.
     public func getCategories(args: CategoryArgs? = nil) async -> APIResponse {
         let queryParams: [String: Any?] = [
-            "tenant_id": args?.tenantId,
+            "tenant_id": args?.tenantId ?? config.tenantId,
             "show_opt_out_channels": "\(args?.showOptOutChannels ?? true)",
+            "tags": encodeTags(args?.tags),
+            "locale": args?.locale,
             "limit": args?.limit,
             "offset": args?.offset,
         ]
@@ -191,8 +264,9 @@ public class Preferences {
     ///   - args: Arguments for the request. Defaults to an empty dictionary.
     public func getCategory(category: String, args: Args? = nil) async -> APIResponse {
         let questionParams: [String: Any?] = [
-            "tenant_id": args?.tenantId,
+            "tenant_id": args?.tenantId ?? config.tenantId,
             "show_opt_out_channels": "\(args?.showOptOutChannels ?? true)",
+            "locale": args?.locale,
         ]
 
         let path = getUrlpath(path: "category/\(category)", qp: questionParams)
@@ -201,8 +275,14 @@ public class Preferences {
     }
 
     /// Used to get overall channel preferences.
-    public func getOverallChannelPreferences() async -> APIResponse {
-        let path = getUrlpath(path: "channel_preference")
+    /// - Parameters:
+    ///   - args: Arguments for the request. Only `tenantId` is honoured here;
+    ///     other fields on ``Args`` are ignored. Defaults to `nil`.
+    public func getOverallChannelPreferences(args: Args? = nil) async -> APIResponse {
+        let queryParams: [String: Any?] = [
+            "tenant_id": args?.tenantId ?? config.tenantId
+        ]
+        let path = getUrlpath(path: "channel_preference", qp: queryParams)
         return await config.client().request(
             reqData: .init(path: path.absoluteString, payload: nil, type: .get))
     }
@@ -214,8 +294,10 @@ public class Preferences {
         args: Args? = nil
     ) async -> PreferenceAPIResponse {
         let queryParams: [String: Any?] = [
-            "tenant_id": args?.tenantId,
-            "show_opt_out_channels": "\(args?.showOptOutChannels ?? true)",
+            "tenant_id": args?.tenantId ?? preferenceArgs?.tenantId ?? config.tenantId,
+            "show_opt_out_channels": "\(resolveShowOptOutChannels(args))",
+            "tags": encodeTags(args?.tags ?? preferenceArgs?.tags),
+            "locale": args?.locale ?? preferenceArgs?.locale,
         ]
 
         let path = getUrlpath(path: "category/\(category)", qp: queryParams)
@@ -239,8 +321,14 @@ public class Preferences {
         return response
     }
 
-    private func _updateChannelPreferences(body: ChannelRequestPayload) async -> PreferenceAPIResponse {
-        let path = getUrlpath(path: "channel_preference")
+    private func _updateChannelPreferences(
+        body: ChannelRequestPayload,
+        args: Args? = nil
+    ) async -> PreferenceAPIResponse {
+        let queryParams: [String: Any?] = [
+            "tenant_id": args?.tenantId ?? preferenceArgs?.tenantId ?? config.tenantId
+        ]
+        let path = getUrlpath(path: "channel_preference", qp: queryParams)
 
         let response: PreferenceAPIResponse = await config.client().request(
             reqData: .init(
@@ -329,7 +417,7 @@ public class Preferences {
             }
         })
 
-        let showOptOutChannels = preferenceArgs?.showOptOutChannels ?? true
+        let showOptOutChannels = resolveShowOptOutChannels(args)
 
         let channels = showOptOutChannels && preference == .optIn ? nil : optOutChannels
 
@@ -338,12 +426,13 @@ public class Preferences {
             optOutChannels: channels
         )
 
-        debouncedUpdateCategoryPreferences.send(
-            .init(
+        categoryPreferenceDebouncer.send(
+            key: category,
+            payload: .init(
                 category: category,
                 body: requestPayload,
                 subCategory: categoryData,
-                args: args
+                args: resolvedArgs(args, showOptOutChannels: showOptOutChannels)
             )
         )
 
@@ -443,7 +532,7 @@ public class Preferences {
             }
         }
 
-        let showOptOutChannels = args?.showOptOutChannels ?? true
+        let showOptOutChannels = resolveShowOptOutChannels(args)
 
         let categoryPreference: PreferenceOptions =
             showOptOutChannels && categoryData.preference == .optOut && preference == .optIn
@@ -451,13 +540,14 @@ public class Preferences {
 
         let requestPayload = RequestPayload(
             preference: categoryPreference, optOutChannels: optOutChannels)
-        
-        debouncedUpdateCategoryPreferences.send(
-            .init(
+
+        categoryPreferenceDebouncer.send(
+            key: category,
+            payload: .init(
                 category: category,
                 body: requestPayload,
                 subCategory: categoryData,
-                args: args
+                args: resolvedArgs(args, showOptOutChannels: showOptOutChannels)
             )
         )
 
@@ -469,18 +559,20 @@ public class Preferences {
     ///   - channel: The ID of the channel to update. Defaults to `nil`.
     ///   - preference: The new preference value. Defaults to `nil`.
     public func updateOverallChannelPreference(
-        channel: String, preference: ChannelLevelPreferenceOptions
+        channel: String,
+        preference: ChannelLevelPreferenceOptions,
+        args: Args? = nil
     ) -> PreferenceAPIResponse {
 
         guard let data else {
             return .error(
                 .init(
                     type: .validation,
-                    message: "Call getPreferences method before performing this action."))
+                    message: "Call getPreferences method before performing action"))
         }
 
         guard let channelPreferences = data.channelPreferences else {
-            return .error(.init(type: .validation, message: "Channel preferences does not exist."))
+            return .error(.init(type: .validation, message: "Channel preferences doesn't exist"))
         }
 
         var channelData: ChannelPreference? = nil
@@ -499,7 +591,7 @@ public class Preferences {
         }
 
         guard let channelData else {
-            return .error(.init(type: .validation, message: "Channel data not found."))
+            return .error(.init(type: .validation, message: "Channel data not found"))
         }
 
         if !dataUpdated {
@@ -507,9 +599,63 @@ public class Preferences {
         }
         
         let requestPayload = ChannelRequestPayload(channelPreferences: [channelData])
-        
-        debouncedUpdateChannelPreferences.send(requestPayload)
+
+        channelPreferenceDebouncer.send(
+            key: channelData.channel,
+            payload: .init(body: requestPayload, args: args)
+        )
 
         return .success(body: data)
+    }
+}
+
+/// A per-key debouncer that mirrors the web SDK's `debounceByType`.
+///
+/// Each unique `key` has its own pending task. A new `send` for the same key
+/// cancels the in-flight task and starts a fresh delay so the *latest* payload
+/// wins. Sends for different keys are independent and run in parallel — this
+/// is the key behavioural difference vs a single `Combine.debounce` upstream,
+/// which would drop earlier different-key events when rapid sends arrive
+/// inside the debounce window.
+final class KeyedDebouncer<Payload>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var tasks: [String: Task<Void, Never>] = [:]
+    private let delayNanoseconds: UInt64
+
+    /// Invoked once per debounced key with the latest payload for that key.
+    /// Set after construction so the closure can capture `self` weakly.
+    var action: ((Payload) async -> Void)?
+
+    init(delayNanoseconds: UInt64) {
+        self.delayNanoseconds = delayNanoseconds
+    }
+
+    func send(key: String, payload: Payload) {
+        let delay = delayNanoseconds
+
+        lock.lock()
+        let actionRef = action
+        tasks[key]?.cancel()
+        let task = Task {
+            do {
+                try await Task.sleep(nanoseconds: delay)
+            } catch {
+                return
+            }
+            await actionRef?(payload)
+        }
+        tasks[key] = task
+        lock.unlock()
+    }
+
+    func cancelAll() {
+        lock.lock()
+        for task in tasks.values { task.cancel() }
+        tasks.removeAll()
+        lock.unlock()
+    }
+
+    deinit {
+        cancelAll()
     }
 }

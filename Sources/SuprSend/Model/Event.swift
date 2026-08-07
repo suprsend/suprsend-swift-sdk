@@ -54,6 +54,33 @@ struct Event: Encodable {
     let distinctID: String
     /// The properties associated with the event.
     let properties: Property
+    /// Active tenant this event is scoped to, sourced from the global tenant.
+    /// Emitted at the top level of the `v2/event` payload — `null` when no
+    /// tenant is set — so the backend can attribute the event.
+    let tenantId: String?
+    /// Whether to emit the `tenant_id` key at all. Notification events sent via
+    /// the public path (`$notification_clicked`/`_delivered`/`_dismiss`) omit
+    /// it entirely — their tenant is resolved server-side from the notification
+    /// id, and the client's current tenant may be stale or unrelated.
+    let emitsTenant: Bool
+
+    init(
+        event: String,
+        insertID: String,
+        time: TimeInterval,
+        distinctID: String,
+        properties: Property,
+        tenantId: String?,
+        emitsTenant: Bool = true
+    ) {
+        self.event = event
+        self.insertID = insertID
+        self.time = time
+        self.distinctID = distinctID
+        self.properties = properties
+        self.tenantId = tenantId
+        self.emitsTenant = emitsTenant
+    }
 
     enum CodingKeys: String, CodingKey {
         case event
@@ -61,6 +88,22 @@ struct Event: Encodable {
         case time = "$time"
         case distinctID = "distinct_id"
         case properties
+        case tenantId = "tenant_id"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(event, forKey: .event)
+        try container.encode(insertID, forKey: .insertID)
+        try container.encode(time, forKey: .time)
+        try container.encode(distinctID, forKey: .distinctID)
+        try container.encode(properties, forKey: .properties)
+        // Explicit `encode` (not `encodeIfPresent`) so a nil tenant serialises
+        // as JSON `null` rather than being omitted. Skipped entirely when
+        // `emitsTenant` is false (public notification events).
+        if emitsTenant {
+            try container.encode(tenantId, forKey: .tenantId)
+        }
     }
 }
 
@@ -69,9 +112,11 @@ enum ChannelType: String, Encodable, CodingKeyRepresentable {
     /// iOS push notification channel.
     case iOSPush = "$iospush"
     /// Push notification channel from a vendor.
-    case pushVendor = "$pushvendor"
+    case pushVendor = "$id_provider"
     /// Device ID channel.
     case deviceID = "$device_id"
+    /// App bundle identifier.
+    case bundleID = "$bundle_id"
     /// Email channel.
     case email = "$email"
     /// SMS channel.
@@ -116,6 +161,10 @@ struct UserProperty: Encodable {
     let distinctID: String
     /// A dictionary of event types and their associated properties.
     let eventProperties: [EventType: Property]
+    /// Active tenant this event is scoped to, sourced from the global tenant.
+    /// Always emitted at the top level of the `v2/event` payload — `null` when
+    /// no tenant is set.
+    let tenantId: String?
 
     /// Encodes the `UserProperty` instance into the given encoder.
     /// - Parameter encoder: The encoder to use for encoding.
@@ -131,12 +180,14 @@ struct UserProperty: Encodable {
             // Use the rawValue of the EventType ("$set", "$add", etc.) as the key
             try container.encode(property, forKey: AnyCodingKey(type.rawValue))
         }
+        try container.encodeIfPresent(self.tenantId, forKey: AnyCodingKey(CodingKeys.tenantId.rawValue))
     }
 
     enum CodingKeys: String, CodingKey {
         case insertID = "$insert_id"
         case time = "$time"
         case distinctID = "distinct_id"
+        case tenantId = "tenant_id"
     }
 }
 

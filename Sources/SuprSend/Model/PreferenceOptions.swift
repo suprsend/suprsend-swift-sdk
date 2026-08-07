@@ -23,6 +23,16 @@ public enum ChannelLevelPreferenceOptions: String, Codable {
     case required = "required"
 }
 
+/// Tags filter used when fetching/updating preferences.
+///
+/// Mirrors the web SDK's `tags: string | Dictionary` shape — pass either a
+/// raw string or a dictionary that is serialised to JSON when sent as a
+/// query parameter.
+public enum PreferenceTags {
+    case string(String)
+    case dictionary([String: Any])
+}
+
 public class CategoryChannel: Codable {
     /// The name of the channel
     public let channel: String

@@ -1,0 +1,376 @@
+# Preferences
+
+Build a notification preference center in your iOS Swift app with SuprSend SDK methods to fetch, display, and update user channel and category opt-ins.
+
+### Pre-Requisites
+
+- Integration of [iOS SDK](../README.md)
+
+- [Configure preference categories](https://docs.suprsend.com/docs/user-preferences#setting-up-preference-categories) on SuprSend dashboard
+
+## Understanding preference structure
+
+This is how a typical preference page will look like:
+
+![Preference structure](https://mintcdn.com/suprsend/ysJyO3LOXwZ5L098/images/docs/full-pref-structure.png?fit=max&auto=format&n=ysJyO3LOXwZ5L098&q=85&s=46051ca09456c491a19ae6ddb0c45c4b)
+
+Preference Page contains 2 sections:
+
+1. Category-level preference settings (Sections)
+
+   - [Sections](#11-sections)
+
+   - [Categories](#12-categories-sections---sub-categories)
+
+   - [Category Channel](#13-category-channels-sections---sub-categories---channels)
+
+     ![Category level preferences](https://mintcdn.com/suprsend/ysJyO3LOXwZ5L098/images/docs/mobile-preferences-1.png?fit=max&auto=format&n=ysJyO3LOXwZ5L098&q=85&s=bafabe25e611cd63e3a3b3ccce751f92)
+
+2. [Overall Channel-level preference](#2-overall-channel-preferences)
+
+![Overall channel level preferences](https://mintcdn.com/suprsend/ysJyO3LOXwZ5L098/images/docs/mobile-preferences-2.png?fit=max&auto=format&n=ysJyO3LOXwZ5L098&q=85&s=fd37373b6f2f1d5ed5cd42500bc2e53d)
+
+### Preferences data structure
+
+```swift
+// Preferences Types
+struct PreferenceData: Codable {
+  var sections: [Section]?
+  var channelPreferences: [ChannelPreference]?
+
+  enum CodingKeys: String, CodingKey {
+    case sections
+    case channelPreferences = "channel_preferences"
+  }
+
+}
+
+struct ChannelPreference: Codable {
+  var channel: String
+  var isRestricted: Bool
+
+  enum CodingKeys: String, CodingKey {
+    case channel
+    case isRestricted = "is_restricted"
+  }
+
+}
+
+struct Section: Codable {
+  var name: String?
+  var description: String?
+  var subcategories: [Category]?
+}
+
+struct Category: Codable {
+  var name: String
+  var category: String
+  var description: String?
+  var preference: PreferenceOptions
+  var isEditable: Bool
+  var channels: [CategoryChannel]?
+
+  enum CodingKeys: String, CodingKey {
+    case name
+    case category
+    case description
+    case preference
+    case isEditable = "is_editable"
+    case channels
+  }
+
+}
+
+struct CategoryChannel: Codable {
+  var channel: String
+  var preference: PreferenceOptions
+  var isEditable: Bool
+
+  enum CodingKeys: String, CodingKey {
+    case channel
+    case preference
+    case isEditable = "is_editable"
+  }
+
+}
+
+enum PreferenceOptions: String, Codable {
+  case optIn = "opt_in"
+  case optOut = "opt_out"
+}
+
+enum ChannelLevelPreferenceOptions: String, Codable {
+  case all = "all"
+  case required = "required"
+}
+```
+
+```json
+// Example
+{
+  "sections": [
+    {
+      "name": null,
+      "subcategories": [
+        {
+          "name": "Payment and History",
+          "category": "payment-and-history",
+          "description": "Send updates related to my payment history.",
+          "preference": "opt_in",
+          "is_editable": false,
+          "channels": [
+            {
+              "channel": "androidpush",
+              "preference": "opt_in",
+              "is_editable": true
+            },
+            {
+              "channel": "email",
+              "preference": "opt_in",
+              "is_editable": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Product Updates",
+      "description": "Non-marketing notifications related to authentication, activity updates, reminders etc.",
+      "subcategories": [
+        {
+          "name": "Newsletter",
+          "category": "newsletter",
+          "description": "Send updates on new feature in the product",
+          "preference": "opt_in",
+          "is_editable": true,
+          "channels": [
+            {
+              "channel": "androidpush",
+              "preference": "opt_in",
+              "is_editable": true
+            },
+            {
+              "channel": "email",
+              "preference": "opt_out",
+              "is_editable": false
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "channel_preferences": [
+    {
+      "channel": "androidpush",
+      "is_restricted": false
+    },
+    {
+      "channel": "email",
+      "is_restricted": true
+    }
+  ]
+}
+```
+
+### 1.1 Sections
+
+This contains the name, description, and subcategories. We have to loop through the sections list and for every section item if there is a name and description present, then show the heading, and if a subcategories list is present, loop through that subcategories list and show all subcategories under that section heading.
+
+Subcategories can exist without sections as the section is an optional field. In that case, the section's name will not be available. For sections where the name is not present, you can directly show its subcategories list without showing Heading for the section in UI.
+
+![Sections](https://mintcdn.com/suprsend/ysJyO3LOXwZ5L098/images/docs/mobile-sections.png?fit=max&auto=format&n=ysJyO3LOXwZ5L098&q=85&s=ed2462d6b94cea40d797de056896509a)
+
+```swift
+struct Section: Codable {
+ var name: String?
+ var description: String?
+ var subcategories: [Category]?
+}
+```
+
+| Property      | Description                                               |
+| ------------- | --------------------------------------------------------- |
+| name          | name of the section                                       |
+| description   | description of the section                                |
+| subcategories | data of all sub-categories to be shown inside the section |
+
+### 1.2 Categories (sections -> sub-categories)
+
+This is the place where the user sets his category-level preferences. While looping through the subcategories list for every subcategory item, show the name and description in UI.
+
+![Categories](https://mintcdn.com/suprsend/ysJyO3LOXwZ5L098/images/docs/mobile-category.png?fit=max&auto=format&n=ysJyO3LOXwZ5L098&q=85&s=286bb93a230fccaa45ab9d9f0acd5eb8)
+
+```swift
+struct Category: Codable {
+ var name: String
+ var category: String
+ var description: String?
+ var preference: PreferenceOptions
+ var isEditable: Bool
+ var channels: [CategoryChannel]?
+
+  enum CodingKeys: String, CodingKey {
+    case name
+    case category
+    case description
+    case preference
+    case isEditable = "is_editable"
+    case channels
+  }
+}
+```
+
+| Property     | Description                                                                                                                                        |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| category     | This key is the id of the category which is used while updating the preference.                                                                    |
+| name         | name of the category to be shown on the UI                                                                                                         |
+| description  | description of the category to be shown on the UI                                                                                                  |
+| preference   | This key indicates if the category's preference switch is on or off. Get **OPT\_IN** when the switch is on and **OPT\_OUT** when the switch is off |
+| is\_editable | Indicates if the preference switch button is disabled or not. If its value is false then the preference setting for that category can't be edited  |
+| channels     | data of all category channels to be shown below the sub-category. Loop through it to show checkboxes under every subcategory item.                 |
+
+### 1.3 Category channels (sections -> sub-categories -> channels)
+
+This contains a list of channels, channel preference status and whether it's editable or not. While looping through the subcategory list for every subcategory item we have to loop through its channels list and for every channel to show channel level checkbox.
+
+![Category channels](https://mintcdn.com/suprsend/ysJyO3LOXwZ5L098/images/docs/mobile-category-channels.png?fit=max&auto=format&n=ysJyO3LOXwZ5L098&q=85&s=489568f7581a820518898ee90300df01)
+
+```swift
+struct CategoryChannel: Codable {
+ var channel: String
+ var preference: PreferenceOptions
+ var isEditable: Bool
+
+  enum CodingKeys: String, CodingKey {
+    case channel
+    case preference
+    case isEditable = "is_editable"
+  }
+
+}
+```
+
+| Property     | Description                                                                                                                                 |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| channel      | name of the channel to be shown on UI. The same key will be used as id of the channel while updating the preference.                        |
+| preference   | This key indicates if the channel's preference switch is on or off. Get OPT\_IN when the switch is on and OPT\_OUT when the switch is off   |
+| is\_editable | Indicates if the preference checkbox is disabled or not. If its value is false then the preference setting for that channel can't be edited |
+
+### 2. Overall channel preferences
+
+It's a list of all channel-level preferences. We have to loop through the list and for each item, show the UI as given in the below image.
+
+![Overall channel preferences](https://mintcdn.com/suprsend/ysJyO3LOXwZ5L098/images/docs/mobile-preferences-2.png?fit=max&auto=format&n=ysJyO3LOXwZ5L098&q=85&s=fd37373b6f2f1d5ed5cd42500bc2e53d)
+
+```swift
+struct ChannelPreference: Codable {
+  var channel: String
+  var isRestricted: Bool
+
+  enum CodingKeys: String, CodingKey {
+    case channel
+    case isRestricted = "is_restricted"
+  }
+
+}
+```
+
+| Property       | Description                                                                                                                                                                                                                                                                                  |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| channel        | name of the channel to be shown on UI. The same key will be used as id of the channel while updating the preference.                                                                                                                                                                         |
+| is\_restricted | This key indicates the restriction level of channel. If restricted, notification will only be sent in the category where this channel is added as mandatory in preference category settings. **True** means Required radio button is selected. **False** means All radio button is selected. |
+
+## Integration
+
+### Get preferences data
+
+Use this method to get preferences data and create the preferences UI by following the above sections. This method should be called first before any update preference methods.
+
+```swift
+await SuprSend.shared.preferences.getPreferences(args: Preferences.Args(tenantId: "", tags: "", locale: "")) 
+```
+
+| Argument (optional) | Description                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tenantId`          | Tenant identifier for loading per-tenant preferences. Defaults to the active tenant set in `identify` or [changeTenant](../README.md#change-active-tenant)                                                                                                                                                                                                                                                            |
+| `tags`              | Filter categories by tags. Used to filter preference categories based on user's roles, department or teams. (see [Tags](https://docs.suprsend.com/docs/notification-category#tags))                                                                                                                           |
+| `locale`            | Locale code (for example, `es`, `fr`, `de`, `es-AR`) to fetch preference translations in user's locale. When provided, category names and descriptions will be returned in the specified locale. If a translation is missing for the requested locale, the system automatically falls back in this order: `locale-region` (for example, `es-AR`) → `locale` (for example, `es`) → `en` (English - always available). |
+
+> **Warning**
+> If you are passing `tenantId` in preferences (or have set it via `identify` / `changeTenant`), make sure that tenant is included in the `scope.tenant_id` key while creating [userToken](https://docs.suprsend.com/docs/client-authentication) passed during identifying user, else an error will be thrown due to scope mismatch.
+
+**Returns:** `async -> PreferenceAPIResponse`
+
+### Update channel preference in category
+
+Calling this method will opt-in/opt-out users from that category-level channel. When the category's channel checkbox is editable and the user clicks on the checkbox you can call this method.
+
+```swift
+await SuprSend.shared.preferences.updateChannelPreferenceInCategory(
+  channel: "channel",
+  preference: PreferenceOptions,
+  category: "category"
+)
+
+enum PreferenceOptions: String, Codable {
+   case optIn = "opt_in"
+   case optOut = "opt_out"
+}
+```
+
+**Returns:** `async -> PreferenceAPIResponse`
+
+![Update channel preference in category](https://mintcdn.com/suprsend/ysJyO3LOXwZ5L098/images/docs/mobile-update-channel-preference-in-category.png?fit=max&auto=format&n=ysJyO3LOXwZ5L098&q=85&s=29a092367c0a467a152bc6fd6bb0421e)
+
+### Update category preference
+
+This is category level preference changing method. Calling this method will opt-in/opt-out user from that category. When the category is editable and the switch is toggled you can call this method.
+
+```swift
+await SuprSend.shared.preferences.updateCategoryPreference(category: "category_value", preference: PreferenceOptions)
+
+enum PreferenceOptions: String, Codable {
+  case optIn = "opt_in"
+  case optOut = "opt_out"
+}
+```
+
+**Returns:** `async -> PreferenceAPIResponse`
+
+### Update overall channel preference
+
+This method updated the channel-level preference of the user.
+
+```swift
+await SuprSend.shared.preferences.updateOverallChannelPreference(
+  channel: "channel",
+  preference: ChannelLevelPreferenceOptions
+)
+
+enum ChannelLevelPreferenceOptions: String, Codable {
+ case all = "all"
+ case required = "required"
+}
+```
+
+**Returns:** `async -> PreferenceAPIResponse`
+
+![Update overall channel preference](https://mintcdn.com/suprsend/ysJyO3LOXwZ5L098/images/docs/mobile-overall-update-channels.png?fit=max&auto=format&n=ysJyO3LOXwZ5L098&q=85&s=43fae7ed01bbb0ddde7ca1ae7fe425f4)
+
+### Event listeners
+
+All preferences update api's are optimistic updates. Actual API call will happen in background with 1 second debounce. Since its a background task SDK provides event listeners to get updated preference data based on API call status. Listen to this event listeners and update the UI accordingly.
+
+```swift
+SuprSend.shared.emitter.on(.preferencesUpdated) { data in
+  // update local store so that UI is updated with latest data
+}
+
+SuprSend.shared.emitter.on(.preferencesError) { error in
+  // show error toast to user
+}
+```
+
+## Example
+
+Preferences UI example code: [PreferencesView.swift](https://github.com/suprsend/suprsend-swift-sdk/blob/main/Example/SuprSendSwiftExample-iOS/Views/Profile/Preferences/PreferencesView.swift) and [PreferenceModel.swift](https://github.com/suprsend/suprsend-swift-sdk/blob/main/Example/SuprSendSwiftExample-iOS/Model/PreferenceModel.swift)

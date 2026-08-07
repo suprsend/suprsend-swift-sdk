@@ -12,9 +12,14 @@ class PushQueue {
     private let userDefaultsKey: String = "PushQueueItems"
     
     let config: SuprSendClient
-    
+
     //declare this property where it won't go out of scope relative to your listener
     let reachability = try! Reachability()
+
+    // Serializes all access to `items` so concurrent flushes (e.g. a cold-start
+    // notification tap on a background Task and configure() on the main thread)
+    // can't mutate the array at the same time.
+    private let syncQueue = DispatchQueue(label: "com.suprsend.pushQueue")
     
     init(config: SuprSendClient) {
         self.config = config
@@ -51,34 +56,39 @@ class PushQueue {
     }
     
     func push(_ item: PushQueueItem) {
-        items.append(item)
+        syncQueue.sync { items.append(item) }
         flush()
     }
-    
+
+    /// Retries any persisted/pending events. Called after `configure()` so a
+    /// cold-start event queued before the public key was set (e.g. a
+    /// notification tap from a killed state) gets sent once the key is available.
+    func flushPendingEvents() {
+        flush()
+    }
+
     private func flush() {
-        while let item = pop() {
+        let pending = syncQueue.sync { items }
+        for item in pending {
             Task {
                 let response = await triggetEvent(item: item)
-                
-                if response.status == .error {
-                    pushOnly(item)
+
+                // Remove only after a confirmed send. If the send fails or the
+                // app is killed mid-send, the item stays persisted and is retried
+                // on the next flush/launch — so events are never lost. A flush
+                // overlapping an in-flight send may resend it (duplicates are
+                // acceptable; lost events are not).
+                if response.status != .error {
+                    syncQueue.sync {
+                        if let index = items.firstIndex(of: item) {
+                            items.remove(at: index)
+                        }
+                    }
                 }
             }
         }
     }
-    
-    
-    private func pushOnly(_ item: PushQueueItem) {
-        items.append(item)
-    }
-    
-    private func pop() -> PushQueueItem? {
-        if items.isEmpty {
-            return nil
-        }
-        return items.removeFirst()
-    }
-    
+
     private func triggetEvent(item: PushQueueItem) async -> APIResponse {
         await config.trackPublic(event: item.event, properties: [
             "id": item.nid
@@ -86,7 +96,7 @@ class PushQueue {
     }
 }
 
-struct PushQueueItem: Codable {
+struct PushQueueItem: Codable, Equatable {
     let event: String
     let nid: String
 }

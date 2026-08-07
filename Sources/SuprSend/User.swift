@@ -37,7 +37,8 @@ public class User {
             insertID: UUID().uuidString,
             time: Date().timeIntervalSince1970,
             distinctID: distinctID,
-            eventProperties: eventProperties
+            eventProperties: eventProperties,
+            tenantId: config.tenantId
         )
         return await config.eventApi(payload: .init(event))
     }
@@ -223,6 +224,7 @@ extension User {
                 .iOSPush: token,
                 .deviceID: getDeviceID(),
                 .pushVendor: Constants.pushVendor,
+                .bundleID: Bundle.main.bundleIdentifier ?? "",
             ]
         )
         config.deviceToken = token
@@ -240,6 +242,7 @@ extension User {
                 .iOSPush: token,
                 .deviceID: getDeviceID(),
                 .pushVendor: Constants.pushVendor,
+                .bundleID: Bundle.main.bundleIdentifier ?? "",
             ]
         )
         return await triggerUserEvent(event)
