@@ -26,7 +26,7 @@ In second dialog box, select your project's target from dropdown and click `Add 
 **For SDK version `1.1.0` onwards**, add the SDK to your Podfile using the GitHub source and run `pod install`:
 
 ```ruby
-pod 'SuprSendSwift', :git => 'https://github.com/suprsend/suprsend-swift-sdk.git', :tag => '2.0.0'
+pod 'SuprSendSwift', :git => 'https://github.com/suprsend/suprsend-swift-sdk.git', :tag => '2.0.1'
 ```
 
 **For SDK versions till `1.0.1`**, add the SuprSendSwift SDK to your Podfile as `pod "SuprSendSwift"` and run `pod install` to install the SDK.
