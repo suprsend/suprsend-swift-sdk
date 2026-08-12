@@ -12,6 +12,8 @@ struct HomeScreen: View {
     @State private var loggingOut: Bool = false
     @State private var tenantInput: String = ""
     private let sampleEmail = "user@example.com"
+    private let samplePhone = "+15555550100"
+    private let samplePushToken = "sample-apns-device-token"
 
     private var canSwitchTenant: Bool {
         let trimmed = tenantInput.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -31,36 +33,29 @@ struct HomeScreen: View {
             }
             .padding(.bottom, 28)
 
-            tenantSwitcher
-                .padding(.bottom, 24)
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 24) {
+                    tenantSwitcher
 
-            VStack(spacing: 12) {
-                actionButton("Preferences", action: onOpenPreferences)
-                inboxButton
-                actionButton("Add email") {
-                    Task {
-                        let r = await SuprSend.shared.user.addEmail(sampleEmail)
-                        ToastCenter.shared.show(r.status == .error ? "Add email failed" : "Add email ok")
+                    VStack(spacing: 12) {
+                        actionButton("Preferences", action: onOpenPreferences)
+                        inboxButton
+                        actionButton("Track event") {
+                            Task {
+                                let r = await SuprSend.shared.track(
+                                    event: "home_button_clicked",
+                                    properties: ["source": "home_screen"]
+                                )
+                                ToastCenter.shared.show(r.status == .error ? "Track event failed" : "Track event ok")
+                            }
+                        }
                     }
+
+                    userMethodsSection
+                    channelMethodsSection
                 }
-                actionButton("Remove email") {
-                    Task {
-                        let r = await SuprSend.shared.user.removeEmail(sampleEmail)
-                        ToastCenter.shared.show(r.status == .error ? "Remove email failed" : "Remove email ok")
-                    }
-                }
-                actionButton("Track event") {
-                    Task {
-                        let r = await SuprSend.shared.track(
-                            event: "home_button_clicked",
-                            properties: ["source": "home_screen"]
-                        )
-                        ToastCenter.shared.show(r.status == .error ? "Track event failed" : "Track event ok")
-                    }
-                }
+                .padding(.bottom, 16)
             }
-
-            Spacer()
 
             Button(action: {
                 if loggingOut { return }
@@ -167,6 +162,158 @@ struct HomeScreen: View {
                     .clipShape(Capsule())
                     .offset(x: 8, y: -8)
             }
+        }
+    }
+
+    /// Every user-property method in both call styles: the single key/value
+    /// convenience and the dictionary form. Both funnel into the same
+    /// `UserProperty` encoding path, so this doubles as a live regression
+    /// check for the PR #7 crash.
+    private var userMethodsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionHeader("USER METHODS — KEY/VALUE VS DICTIONARY")
+            HStack(spacing: 8) {
+                testButton("set (k,v)") {
+                    await SuprSend.shared.user.set(key: "plan", value: "pro")
+                }
+                testButton("set {dict}") {
+                    await SuprSend.shared.user.set(properties: ["plan": "pro", "trial": false])
+                }
+            }
+            HStack(spacing: 8) {
+                testButton("setOnce (k,v)") {
+                    await SuprSend.shared.user.setOnce(key: "signup_source", value: "ios_example")
+                }
+                testButton("setOnce {dict}") {
+                    await SuprSend.shared.user.setOnce(properties: ["signup_source": "ios_example"])
+                }
+            }
+            HStack(spacing: 8) {
+                testButton("increment (k,v)") {
+                    await SuprSend.shared.user.increment(key: "login_count", value: 1)
+                }
+                testButton("increment {dict}") {
+                    await SuprSend.shared.user.increment(properties: ["login_count": 1, "session_count": 2])
+                }
+            }
+            HStack(spacing: 8) {
+                testButton("append (k,v)") {
+                    await SuprSend.shared.user.append(key: "tags", value: "swift")
+                }
+                testButton("append {dict}") {
+                    await SuprSend.shared.user.append(properties: ["tags": "sdk-test"])
+                }
+            }
+            HStack(spacing: 8) {
+                testButton("remove (k,v)") {
+                    await SuprSend.shared.user.remove(key: "tags", value: "swift")
+                }
+                testButton("remove {dict}") {
+                    await SuprSend.shared.user.remove(properties: ["tags": "sdk-test"])
+                }
+            }
+            HStack(spacing: 8) {
+                testButton("unset (key)") {
+                    await SuprSend.shared.user.unset(key: "plan")
+                }
+                testButton("unset [keys]") {
+                    await SuprSend.shared.user.unset(keys: ["plan", "trial"])
+                }
+            }
+        }
+    }
+
+    /// Add/remove pairs for every channel method, plus the two channel setters.
+    private var channelMethodsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionHeader("CHANNEL METHODS — ADD / REMOVE")
+            HStack(spacing: 8) {
+                testButton("add email") {
+                    await SuprSend.shared.user.addEmail(sampleEmail)
+                }
+                testButton("remove email") {
+                    await SuprSend.shared.user.removeEmail(sampleEmail)
+                }
+            }
+            HStack(spacing: 8) {
+                testButton("add SMS") {
+                    await SuprSend.shared.user.addSMS(samplePhone)
+                }
+                testButton("remove SMS") {
+                    await SuprSend.shared.user.removeSMS(samplePhone)
+                }
+            }
+            HStack(spacing: 8) {
+                testButton("add WhatsApp") {
+                    await SuprSend.shared.user.addWhatsapp(samplePhone)
+                }
+                testButton("remove WhatsApp") {
+                    await SuprSend.shared.user.removeWhatsapp(samplePhone)
+                }
+            }
+            HStack(spacing: 8) {
+                testButton("add Slack") {
+                    await SuprSend.shared.user.addSlack(["email": sampleEmail])
+                }
+                testButton("remove Slack") {
+                    await SuprSend.shared.user.removeSlack(["email": sampleEmail])
+                }
+            }
+            HStack(spacing: 8) {
+                testButton("add MS Teams") {
+                    await SuprSend.shared.user.addMSTeams(["user_id": "ms-user-1"])
+                }
+                testButton("remove MS Teams") {
+                    await SuprSend.shared.user.removeMSTeams(["user_id": "ms-user-1"])
+                }
+            }
+            HStack(spacing: 8) {
+                testButton("add iOS push") {
+                    await SuprSend.shared.user.addiOSPush(samplePushToken)
+                }
+                testButton("remove iOS push") {
+                    await SuprSend.shared.user.removeiOSPush(samplePushToken)
+                }
+            }
+            HStack(spacing: 8) {
+                testButton("set language (en)") {
+                    await SuprSend.shared.user.setPreferredLanguage("en")
+                }
+                testButton("set timezone") {
+                    await SuprSend.shared.user.setTimezone("America/Los_Angeles")
+                }
+            }
+        }
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundColor(.secondary)
+            .kerning(0.5)
+    }
+
+    /// A compact button that fires one SDK call and toasts the outcome.
+    @ViewBuilder
+    private func testButton(_ title: String, call: @escaping () async -> APIResponse) -> some View {
+        Button {
+            Task {
+                let r = await call()
+                ToastCenter.shared.show(r.status == .error ? "\(title) failed" : "\(title) ok")
+            }
+        } label: {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(Color(.systemBackground))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color(.systemGray4), lineWidth: 1)
+                )
         }
     }
 

@@ -108,7 +108,7 @@ struct Event: Encodable {
 }
 
 /// Represents different channels for communication
-enum ChannelType: String, Encodable, CodingKeyRepresentable {
+enum ChannelType: String, Encodable {
     /// iOS push notification channel.
     case iOSPush = "$iospush"
     /// Push notification channel from a vendor.
@@ -138,7 +138,7 @@ struct UserProperty: Encodable {
     /// A typealias for a dictionary of event types and their associated properties.
     typealias EventProperties = [EventType: Property]
     /// Represents different types of user property operations.
-    enum EventType: String, Encodable, CodingKeyRepresentable {
+    enum EventType: String, Encodable {
         /// Sets the value of a user property.
         case set = "$set"
         /// Sets the value of a user property only if it hasn't been set before.
@@ -176,7 +176,17 @@ struct UserProperty: Encodable {
         // Explicit `encode` (not `encodeIfPresent`) so a nil tenant serialises
         // as JSON `null` rather than being omitted from the payload.
         try container.encode(self.tenantId, forKey: .tenantId)
-        try self.eventProperties.encode(to: encoder)
+        // Encode each operation under its own top-level key ("$set", "$add", …)
+        // rather than deferring to Dictionary's Encodable conformance: for
+        // enum-keyed dictionaries that conformance only produces a keyed
+        // container on iOS 15.4+/macOS 12.3+ (where `CodingKeyRepresentable`
+        // exists at runtime); on older OSes it requests an *unkeyed* container
+        // from an encoder that already vended a keyed one, which traps with
+        // EXC_BREAKPOINT.
+        var operations = encoder.container(keyedBy: RawCodingKey.self)
+        for (type, property) in eventProperties {
+            try operations.encode(property, forKey: RawCodingKey(type.rawValue))
+        }
     }
 
     enum CodingKeys: String, CodingKey {
@@ -185,4 +195,14 @@ struct UserProperty: Encodable {
         case distinctID = "distinct_id"
         case tenantId = "tenant_id"
     }
+}
+
+/// A coding key backed by an arbitrary string, for dynamically-keyed payloads.
+struct RawCodingKey: CodingKey {
+    let stringValue: String
+    var intValue: Int? { nil }
+
+    init(_ stringValue: String) { self.stringValue = stringValue }
+    init?(stringValue: String) { self.init(stringValue) }
+    init?(intValue: Int) { nil }
 }

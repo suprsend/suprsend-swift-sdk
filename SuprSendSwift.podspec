@@ -1,6 +1,6 @@
 Pod::Spec.new do |spec|
   spec.name         = "SuprSendSwift"
-  spec.version      = "2.0.0"
+  spec.version      = "2.0.1"
   spec.summary      = "SuprSend Swift SDK."
   spec.description  = <<-DESC
   SuprSend is a robust notification infrastructure that helps you deploy multi-channel product notifications effortlessly and take care of user experience.

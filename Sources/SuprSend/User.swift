@@ -207,7 +207,15 @@ extension ChannelProperty {
     /// This method takes no parameters and returns a promise that resolves with a `Property` object representing the converted channel property.
     /// - Returns: A promise that resolves with a `Property` object representing the converted channel property, or rejects with an error if one occurs.
     func convertToProperty() -> Property {
-        .init(compactMapValues { AnyEncodable($0) })
+        // Re-key by rawValue: String-keyed dictionaries always encode as JSON
+        // objects, whereas enum-keyed ones encode as an alternating key/value
+        // *array* on OSes without `CodingKeyRepresentable` support
+        // (pre-iOS 15.4 / macOS 12.3), silently corrupting the payload.
+        var converted = [String: AnyEncodable]()
+        for (key, value) in self {
+            converted[key.rawValue] = AnyEncodable(value)
+        }
+        return .init(converted)
     }
 }
 
