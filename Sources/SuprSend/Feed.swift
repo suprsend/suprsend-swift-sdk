@@ -617,17 +617,17 @@ extension Feed {
         var meta = storeData.meta
         meta["badge"] = "0"
         
-        store.send(storeData.with(
-            notifications: storeData
+        // Apply meta + notifications together so badge clear is not dropped by with(notifications:).
+        store.send(
+            storeData
                 .with(meta: meta)
-                .notifications.map({ notification in
+                .with(notifications: storeData.notifications.map({ notification in
                     if (notification.read_on == nil) {
-                        return notification
-                            .with(read_on: Date.now.timeIntervalSince1970)
+                        return notification.with(read_on: nowInMillis())
                     }
                     return notification
-                })
-        ))
+                }))
+        )
         
         let url = getUrl(path: "mark_all_read", qp: [
             "tenant_id": feedOptions.tenantId,
