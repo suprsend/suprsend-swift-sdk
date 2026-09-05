@@ -73,7 +73,7 @@ public class Feed {
         self.store = .init(
             .init(
                 notifications: [],
-                store: options?.stores?.first ?? FeedConstants.store,
+                store: self.feedOptions?.stores?.first ?? FeedConstants.store,
                 pageInfo: .init(
                     total: .zero,
                     hasMore: false,
