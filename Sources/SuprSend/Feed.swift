@@ -38,7 +38,12 @@ public class Feed {
     /// stale (e.g. on store switch). Fetch checks this after each `await` and
     /// bails if it changed.
     private var fetchGeneration = 0
-    
+
+    /// Epoch millis — matches API / web SDK (created_on, read_on, seen_on, interacted_on).
+    private func nowInMillis() -> TimeInterval {
+        Date.now.timeIntervalSince1970 * 1000
+    }
+
     public var data: IFeedData {
         let storeData = store.value
         
@@ -354,7 +359,7 @@ extension Feed {
                 if (notification.n_id == notificationId) {
                     if (notification.seen_on == nil) {
                         return notification
-                            .with(seen_on: Date.now.timeIntervalSince1970)
+                            .with(seen_on: nowInMillis())
                     } else {
                         alreadyUpdated = true
                     }
@@ -392,7 +397,7 @@ extension Feed {
             notifications: storeData.notifications.map({ notification in
                 if (notification.n_id == notificationId) {
                     if (notification.read_on == nil) {
-                        let now = Date.now.timeIntervalSince1970
+                        let now = nowInMillis()
                         var updated = notification.with(read_on: now)
                         if (notification.seen_on == nil) {
                             updated = updated.with(seen_on: now)
@@ -476,11 +481,11 @@ extension Feed {
                 var newNotification = notification
                 if (notification.n_id == notificationId) {
                     if (notification.interacted_on == nil) {
-                        newNotification = newNotification.with(interacted_on: Date.now.timeIntervalSince1970)
+                        newNotification = newNotification.with(interacted_on: nowInMillis())
                         needsNetwork = true
                     }
                     if (notification.read_on == nil) {
-                        newNotification = newNotification.with(read_on: Date.now.timeIntervalSince1970)
+                        newNotification = newNotification.with(read_on: nowInMillis())
                         needsNetwork = true
                     }
                 }
@@ -509,7 +514,7 @@ extension Feed {
                 )
             )
     }
-    
+
     public func markAsArchived(notificationId: String) async -> APIResponse {
         let storeData = store.value
         var alreadyUpdated = false
@@ -554,7 +559,7 @@ extension Feed {
                 if (notificationIds.contains(notification.n_id)) {
                     if (notification.seen_on == nil) {
                         return notification
-                            .with(seen_on: Date.now.timeIntervalSince1970)
+                            .with(seen_on: nowInMillis())
                     }
                 }
                 return notification
@@ -1102,7 +1107,7 @@ extension Feed {
             let notifications = storeData.notifications.map { notification in
                 if (notification.read_on == nil) {
                     notification
-                        .with(read_on: Date.now.timeIntervalSince1970)
+                        .with(read_on: nowInMillis())
                 } else {
                     notification
                 }
@@ -1129,7 +1134,7 @@ extension Feed {
                     .notifications.map({ notification in
                         if (ids.contains(notification.n_id)) {
                             notification
-                                .with(seen_on: Date.now.timeIntervalSince1970)
+                                .with(seen_on: nowInMillis())
                         } else {
                             notification
                         }
