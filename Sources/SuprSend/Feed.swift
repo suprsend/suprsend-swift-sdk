@@ -877,9 +877,9 @@ extension Feed {
         }
 
         socket = SocketClient(serverURL: host, headers: socketHeaders())
-        socket?.connect()
-
+        // Subscribe before connect so early socket frames are not missed.
         initializeSocketEvents()
+        socket?.connect()
     }
 
     private func socketHeaders() -> [String: String] {
