@@ -289,7 +289,7 @@ extension Feed {
                     notifications: notifications,
                     store: storeData.store,
                     pageInfo: pageInfo,
-                    meta: storeData.meta,
+                    meta: store.value.meta, // Use current meta so a parallel fetchCount is not overwritten.
                     apiStatus: .success,
                     isFirstFetch: false
                 )
