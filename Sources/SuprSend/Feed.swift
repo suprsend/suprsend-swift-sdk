@@ -468,28 +468,27 @@ extension Feed {
     
     public func markAsInteracted(notificationId: String) async -> APIResponse {
         let storeData = store.value
-        var alreadyUpdated = false
+        // Track whether anything actually changed so we still emit/API when only read_on is newly set.
+        var needsNetwork = false
 
         store.send(storeData.with(
             notifications: storeData.notifications.map({ notification in
                 var newNotification = notification
                 if (notification.n_id == notificationId) {
                     if (notification.interacted_on == nil) {
-                        newNotification = newNotification
-                            .with(interacted_on: Date.now.timeIntervalSince1970)
-                    } else {
-                        alreadyUpdated = true
+                        newNotification = newNotification.with(interacted_on: Date.now.timeIntervalSince1970)
+                        needsNetwork = true
                     }
                     if (notification.read_on == nil) {
-                        newNotification = newNotification
-                            .with(read_on: Date.now.timeIntervalSince1970)
+                        newNotification = newNotification.with(read_on: Date.now.timeIntervalSince1970)
+                        needsNetwork = true
                     }
                 }
                 return newNotification
             })
         ))
 
-        if (alreadyUpdated) {
+        if !needsNetwork {
             return .success()
         }
 
