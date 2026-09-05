@@ -56,7 +56,10 @@ final class InboxViewModel: ObservableObject {
             .receive(on: RunLoop.main)
             .sink { [weak self] event in
                 guard let self else { return }
-                if case .storeUpdate(let data) = event {
+                switch event {
+                case .newNotification(let notification):
+                    ToastCenter.shared.show("New:" + (notification.message.header ?? ""))
+                case .storeUpdate(let data):
                     self.apply(data: data)
                 }
             }
