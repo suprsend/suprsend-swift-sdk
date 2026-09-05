@@ -530,6 +530,8 @@ extension Feed {
         ))
         
         if (alreadyUpdated) {
+            // Row already removed locally — notify UI even when skipping the network call.
+            emitter.send(.storeUpdate(self.data))
             return .success()
         }
         
