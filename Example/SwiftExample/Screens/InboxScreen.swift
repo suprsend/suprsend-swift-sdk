@@ -14,6 +14,7 @@ final class InboxViewModel: ObservableObject {
     let stores: [IStore] = [
         IStore(storeId: "all", label: "All"),
         IStore(storeId: "unread", label: "Unread", query: IStoreQuery(read: false)),
+        IStore(storeId: "read", label: "Read", query: IStoreQuery(read: true)),
         IStore(storeId: "archived", label: "Archived", query: IStoreQuery(archived: true)),
         IStore(storeId: "transactional", label: "Transactional", query: IStoreQuery(categories: ["transactional"])),
         IStore(storeId: "custom", label: "Custom", query: IStoreQuery(tags: ["name"])),
@@ -55,7 +56,10 @@ final class InboxViewModel: ObservableObject {
             .receive(on: RunLoop.main)
             .sink { [weak self] event in
                 guard let self else { return }
-                if case .storeUpdate(let data) = event {
+                switch event {
+                case .newNotification(let notification):
+                    ToastCenter.shared.show("New:" + (notification.message.header ?? ""))
+                case .storeUpdate(let data):
                     self.apply(data: data)
                 }
             }

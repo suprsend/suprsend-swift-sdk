@@ -82,10 +82,10 @@ public class SuprSendClient: NSObject {
 
     /// Push instance
     public private(set) lazy var push = Push(config: self)
-    
-    /// Preferences instance
-    public private(set) lazy var preferences = Preferences(config: self)
-    
+
+    /// Preferences instance — same object as ``User/preferences``.
+    public var preferences: Preferences { user.preferences }
+
     /// Feeds instance
     public private(set) lazy var feeds = FeedsFactory(config: self)
 
