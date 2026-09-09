@@ -34,6 +34,14 @@ final class Utils: Sendable {
         UserDefaults.standard.synchronize()
     }
 
+    /// Milliseconds since the Unix epoch as an integer — the unit the hub
+    /// expects for `$time` (it treats the value as ms and defaults to
+    /// `Date.now()` when absent). Matches `epochMs()` in suprsend-web-sdk.
+    /// - Parameter date: The instant to convert; defaults to now.
+    func epochMs(_ date: Date = Date()) -> Int64 {
+        Int64((date.timeIntervalSince1970 * 1000).rounded())
+    }
+
     /// Decodes a JWT token into a dictionary of string-to-any values.
     /// - Parameter jwt: The JWT token to decode.
     /// - Returns: A dictionary containing the decoded payload, or throws an error if decoding fails.

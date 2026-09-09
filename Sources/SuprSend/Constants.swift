@@ -43,10 +43,14 @@ enum Constants {
 
     /// SDK version advertised in the user-agent payload. Keep in lockstep with
     /// `SuprSendSwift.podspec`'s `spec.version` at release time.
-    static let sdkVersion = "2.0.1"
+    static let sdkVersion = "2.1.0"
 
     /// The expiry key for JWT tokens.
     static let expiryKeyJWT = "exp"
+
+    /// How long before a user token's `exp` it's treated as expiring and
+    /// refreshed on demand (seconds).
+    static let userTokenRefreshBefore: TimeInterval = 30
 
     /// The push vendor for APNs.
     static let pushVendor = "apns"

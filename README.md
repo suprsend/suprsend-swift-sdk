@@ -26,7 +26,7 @@ In second dialog box, select your project's target from dropdown and click `Add 
 **For SDK version `1.1.0` onwards**, add the SDK to your Podfile using the GitHub source and run `pod install`:
 
 ```ruby
-pod 'SuprSendSwift', :git => 'https://github.com/suprsend/suprsend-swift-sdk.git', :tag => '2.0.1'
+pod 'SuprSendSwift', :git => 'https://github.com/suprsend/suprsend-swift-sdk.git', :tag => '2.1.0'
 ```
 
 **For SDK versions till `1.0.1`**, add the SuprSendSwift SDK to your Podfile as `pod "SuprSendSwift"` and run `pod install` to install the SDK.
@@ -60,7 +60,7 @@ await SuprSend.shared.identify(distinctID: "YOUR_USER_ID", userToken: userTokenD
 | distinctId\*     | Unique identifier to identify a user across platform.                                                                                                                                                                                     |
 | userToken        | Mandatory when enhanced security mode is on. This is ES256 JWT token generated in your server-side. Refer [docs](https://docs.suprsend.com/docs/client-authentication#enhanced-security-mode-with-signed-user-token) to create userToken. |
 | tenantId         | Needed only when your workspace has multiple tenants/brands. Scopes the identified user's activity to that tenant. Its value must match `scope.tenant_id` in the `userToken` payload, else it raises a scoping error.                     |
-| refreshUserToken | This function is called by SDK internally to get new userToken before existing token is expired. The returned string is used as the new userToken.                                                                                        |
+| refreshUserToken | This function is called by SDK internally to get new userToken when existing token is expired or about to expire, before making any api call. The returned string is used as the new userToken.                                          |
 
 **Returns:** `async -> APIResponse`
 

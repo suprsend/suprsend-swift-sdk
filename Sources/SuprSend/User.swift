@@ -35,7 +35,7 @@ public class User {
     {
         let event = UserProperty(
             insertID: UUID().uuidString,
-            time: Date().timeIntervalSince1970,
+            time: Utils.shared.epochMs(),
             distinctID: distinctID,
             eventProperties: eventProperties,
             tenantId: config.tenantId

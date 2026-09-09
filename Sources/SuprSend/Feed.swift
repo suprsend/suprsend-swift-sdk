@@ -925,39 +925,23 @@ extension Feed {
             .store(in: &cancellables)
     }
 
-    /// Refreshes the user token if it has expired and pushes the new auth
-    /// headers into `SocketClient` so the next scheduled reconnect uses fresh
-    /// credentials. No-op if the token is still valid or no refresh callback
-    /// is configured.
+    /// Refreshes the user token if it has expired or is about to — sharing the
+    /// same on-demand refresh flow (and in-flight dedup) as API calls — then
+    /// pushes the current auth headers into `SocketClient` so the next
+    /// reconnect attempt uses fresh credentials. The first attempt is
+    /// scheduled 1s out, so a slow refresh callback may miss it and land on
+    /// the following one; `SocketClient` keeps retrying with backoff.
     private func handleSocketConnectionLost() async {
-        guard let userToken = config.userToken,
-              let refreshUserToken = config.authenticateOptions?.refreshUserToken else {
-            return
-        }
+        // `connectionLost` can still be delivered after `remove()` tore the
+        // socket down — a dead feed must not poke the (possibly new) session.
+        guard socket != nil else { return }
 
-        let jwtPayload = try? Utils.shared.decode(jwtToken: userToken)
-        let expiresOn = jwtPayload?[Constants.expiryKeyJWT] as? Double ?? .zero
-        let hasExpired = expiresOn <= Date.now.timeIntervalSince1970
+        // No-ops when there's no token / refresh callback or nothing is expiring.
+        await config.client().refreshExpiringUserToken()
 
-        guard hasExpired else { return }
-
-        let newToken: String?
-        do {
-            newToken = try await refreshUserToken(userToken, jwtPayload ?? .init())
-        } catch {
-            logger.warning("[SuprSend]: Couldn't refresh userToken for socket reconnect")
-            return
-        }
-
-        guard let newToken,
-              let distinctID = config.distinctID else { return }
-
-        _ = await config.identify(
-            distinctID: distinctID,
-            userToken: newToken,
-            options: config.authenticateOptions
-        )
-
+        // Always re-sync rather than only when a refresh just ran: the token may
+        // have changed since the socket connected (an API call refreshed it, or
+        // the app re-identified with a new one), leaving the socket's copy stale.
         socket?.updateHeaders(socketHeaders())
     }
 

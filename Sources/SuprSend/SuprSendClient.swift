@@ -90,8 +90,7 @@ public class SuprSendClient: NSObject {
     public private(set) lazy var feeds = FeedsFactory(config: self)
 
     public let emitter = Emitter()
-    private var userTokenExpirationTimer: Timer?
-    
+
     private(set) var urlDelegate: SuprSendDeepLinkDelegate?
 
     /// Create SuprSend instance
@@ -224,10 +223,14 @@ public class SuprSendClient: NSObject {
             self.distinctID == distinctID,
             self.userToken != userToken
         {
+            // `APIClient` reads the token live on every request, so it doesn't
+            // need rebuilding — and keeping the same instance keeps its
+            // in-flight refresh coalescer alive for the whole session.
             self.userToken = userToken
-            self.apiClient = APIClient(config: self)
-            if let refreshUserToken = options?.refreshUserToken {
-                self.handleRefreshUserToken(refreshUserToken: refreshUserToken)
+            // `nil` keeps the existing options (this is how the internal token
+            // refresh re-identifies); pass options to replace them.
+            if let options {
+                self.authenticateOptions = options
             }
 
             return .success()
@@ -246,10 +249,6 @@ public class SuprSendClient: NSObject {
         let authenticatedDistinctID = Utils.shared.getLocalStorageData(
             key: Constants.authenticatedDistinctID)
 
-        if let refreshUserToken = options?.refreshUserToken {
-            self.handleRefreshUserToken(refreshUserToken: refreshUserToken)
-        }
-
         // already loggedin
         if authenticatedDistinctID == self.distinctID {
             await push.updatePushSubscription()
@@ -262,7 +261,7 @@ public class SuprSendClient: NSObject {
                 Event(
                     event: "$identify",
                     insertID: UUID().uuidString,
-                    time: Date.now.timeIntervalSince1970,
+                    time: Utils.shared.epochMs(),
                     distinctID: distinctID,
                     properties: .init(["$identified_id": distinctID]),
                     tenantId: self.tenantId
@@ -332,7 +331,7 @@ public class SuprSendClient: NSObject {
         let event = Event(
             event: event,
             insertID: UUID().uuidString,
-            time: Date().timeIntervalSince1970,
+            time: Utils.shared.epochMs(),
             distinctID: distinctID ?? String(),
             properties: validatedProperties.convertToProperty(),
             tenantId: tenantId ?? self.tenantId
@@ -356,7 +355,7 @@ public class SuprSendClient: NSObject {
         let event = Event(
             event: event,
             insertID: UUID().uuidString,
-            time: Date().timeIntervalSince1970,
+            time: Utils.shared.epochMs(),
             distinctID: distinctID ?? String(),
             properties: validatedProperties.convertToProperty(),
             tenantId: nil,
@@ -364,76 +363,6 @@ public class SuprSendClient: NSObject {
         )
         let response: APIResponse = await publicClient().publicRequest(reqData: .init(path: "v2/event", payload: .init(event), type: .post))
         return response
-    }
-
-    /// Handle refresh user token callback
-    /// - Parameters:
-    ///   - refreshUserToken: Callback to refresh user token
-    func handleRefreshUserToken(refreshUserToken: @escaping RefreshTokenCallback) {
-        guard let userToken else { return }
-
-        let jwtPayload = try? Utils.shared.decode(jwtToken: userToken)
-        let expiresOn = (jwtPayload?[Constants.expiryKeyJWT] as? Double ?? .zero)// in ms
-        let now = Date.now.timeIntervalSince1970
-        let refreshBefore = 30.0  // call refresh api before 30sec of expiry
-
-        if expiresOn > now {
-            let timeDiff = expiresOn - now - refreshBefore
-
-            if userTokenExpirationTimer != nil {
-                userTokenExpirationTimer?.invalidate()
-                userTokenExpirationTimer = nil
-            }
-            
-            userTokenExpirationTimer = Timer.scheduledTimer(
-                withTimeInterval: timeDiff, repeats: false
-            ) { _ in
-                self.timerCallback(refreshUserToken: refreshUserToken)
-            }
-        }
-    }
-
-    /// Timer callback for refresh user token
-    /// - Parameters:
-    ///   - refreshUserToken: Callback to refresh user token
-    private func timerCallback(refreshUserToken: @escaping RefreshTokenCallback) {
-        guard let userToken else { return }
-
-        Task {
-            let newToken: String?
-            let jwtPayload: [String: Any]
-
-            do {
-                jwtPayload = try Utils.shared.decode(jwtToken: userToken)
-            } catch {
-                logger.warning("[SuprSend]: Couldn't decode JWT token")
-                return
-            }
-
-            do {
-                newToken = try await refreshUserToken(
-                    userToken,
-                    jwtPayload
-                )
-            } catch {
-                // retry fetching token
-                do {
-                    newToken = try await refreshUserToken(
-                        userToken,
-                        jwtPayload
-                    )
-                } catch {
-                    newToken = nil
-                    logger.warning("[SuprSend]: Couldn't fetch new userToken")
-                }
-            }
-
-            if let newToken {
-                _ = await self.identify(
-                    distinctID: self.distinctID ?? String(), userToken: newToken,
-                    options: self.authenticateOptions)
-            }
-        }
     }
 
     /// Reset the SuprSend instance.
@@ -453,11 +382,6 @@ public class SuprSendClient: NSObject {
 
         Utils.shared.removeLocalStorageData(key: Constants.authenticatedDistinctID)
 
-        if userTokenExpirationTimer != nil {
-            userTokenExpirationTimer?.invalidate()
-            userTokenExpirationTimer = nil
-        }
-        
         if !feeds.feedInstances.isEmpty {
             feeds.removeAll()
         }

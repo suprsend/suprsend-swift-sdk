@@ -18,7 +18,7 @@ struct UserPropertyTests {
     func testAddOperation(properties: [UserProperty.EventType: Property]) async throws {
         let event = UserProperty(
             insertID: UUID().uuidString,
-            time: Date.now.timeIntervalSince1970,
+            time: Utils.shared.epochMs(),
             distinctID: UUID().uuidString,
             eventProperties: properties,
             tenantId: nil
@@ -28,7 +28,11 @@ struct UserPropertyTests {
 
         #expect(json.keys.contains("$insert_id"))
         #expect(json.keys.contains("distinct_id"))
-        #expect(json.keys.contains("$time"))
+
+        // `$time` must be integer milliseconds since epoch — the hub reads it
+        // as ms, so a seconds value would be timestamped in January 1970.
+        let time = try #require(json["$time"] as? Int64)
+        #expect(time > 1_600_000_000_000)
 
         // A nil tenant must serialise as JSON null, not be omitted.
         #expect(json["tenant_id"] is NSNull)
@@ -45,7 +49,7 @@ struct UserPropertyTests {
     func testEmailProperty(property: ChannelProperty) async throws {
         let event = UserProperty(
             insertID: UUID().uuidString,
-            time: Date.now.timeIntervalSince1970,
+            time: Utils.shared.epochMs(),
             distinctID: UUID().uuidString,
             eventProperties: [.append: property.convertToProperty()],
             tenantId: "tenant-1"
@@ -67,7 +71,7 @@ struct UserPropertyTests {
     func testMultipleOperations() async throws {
         let event = UserProperty(
             insertID: UUID().uuidString,
-            time: Date.now.timeIntervalSince1970,
+            time: Utils.shared.epochMs(),
             distinctID: UUID().uuidString,
             eventProperties: [
                 .set: Property(["plan": "pro"]),

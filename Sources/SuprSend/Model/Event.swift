@@ -48,8 +48,10 @@ struct Event: Encodable {
     let event: String
     /// The unique identifier for the event.
     let insertID: String
-    /// The timestamp of the event.
-    let time: TimeInterval
+    /// The timestamp of the event, in integer milliseconds since the Unix
+    /// epoch (see `Utils.epochMs`). The hub reads `$time` as ms; a seconds
+    /// value is accepted but lands in January 1970.
+    let time: Int64
     /// The unique identifier of the user.
     let distinctID: String
     /// The properties associated with the event.
@@ -67,7 +69,7 @@ struct Event: Encodable {
     init(
         event: String,
         insertID: String,
-        time: TimeInterval,
+        time: Int64,
         distinctID: String,
         properties: Property,
         tenantId: String?,
@@ -155,8 +157,9 @@ struct UserProperty: Encodable {
 
     /// The unique identifier for the user property update.
     let insertID: String
-    /// The timestamp of the user property update.
-    let time: TimeInterval
+    /// The timestamp of the user property update, in integer milliseconds
+    /// since the Unix epoch (see `Utils.epochMs`).
+    let time: Int64
     /// The unique identifier of the user.
     let distinctID: String
     /// A dictionary of event types and their associated properties.

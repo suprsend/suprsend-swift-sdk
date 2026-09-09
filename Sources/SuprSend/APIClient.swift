@@ -10,6 +10,11 @@ import Foundation
 class APIClient {
     private let config: SuprSendClient
 
+    /// Coalesces concurrent token refreshes: API calls that all find the token
+    /// expiring at the same moment share a single `refreshUserToken` callback
+    /// and a single re-identify instead of triggering one each.
+    private let tokenRefresher = SharedInflightTask()
+
     /// Initializes the API client with a configuration.
     /// - Parameter config: The configuration to use for the API client.
     init(config: SuprSendClient) {
@@ -95,11 +100,78 @@ class APIClient {
         return try await fetch(url, method: .patch, body: payload, headers: getHeaders())
     }
 
+    /// Whether a token expiring at `expiresOn` (JWT `exp`, seconds since epoch)
+    /// should be refreshed at `now`: it has already expired, or will within
+    /// `Constants.userTokenRefreshBefore`.
+    static func isUserTokenExpiring(expiresOn: TimeInterval, now: TimeInterval) -> Bool {
+        expiresOn - Constants.userTokenRefreshBefore <= now
+    }
+
+    /// Refreshes `userToken` on demand via the app-supplied `refreshUserToken`
+    /// callback when it has expired or is about to (see ``isUserTokenExpiring``).
+    ///
+    /// Called before every authenticated request, and by `Feed` on socket
+    /// connection loss, so a refresh is never missed because the app was
+    /// suspended or backgrounded (unlike a scheduled timer). No-op when there's
+    /// no token or callback, when the token can't be decoded or has no `exp`,
+    /// or when it's still comfortably valid. Concurrent callers share one
+    /// refresh. Failures are logged and swallowed so the pending request still
+    /// goes out and surfaces the real auth error, if any.
+    func refreshExpiringUserToken() async {
+        guard let distinctID = config.distinctID,
+              let userToken = config.userToken,
+              let refreshUserToken = config.authenticateOptions?.refreshUserToken else {
+            return
+        }
+
+        guard let jwtPayload = try? Utils.shared.decode(jwtToken: userToken) else {
+            logger.warning("[SuprSend]: Couldn't decode userToken, skipping refresh")
+            return
+        }
+
+        // A token without `exp` never expires, so there's nothing to refresh.
+        guard let expiresOn = jwtPayload[Constants.expiryKeyJWT] as? Double else {
+            return
+        }
+
+        guard Self.isUserTokenExpiring(expiresOn: expiresOn, now: Date.now.timeIntervalSince1970) else {
+            return
+        }
+
+        await tokenRefresher.run { [config] in
+            do {
+                // Empty string is treated like `nil`: the callback couldn't
+                // produce a token, so keep the current one (matches web SDK).
+                guard let newUserToken = try await refreshUserToken(userToken, jwtPayload),
+                      !newUserToken.isEmpty else {
+                    return
+                }
+
+                // The app's callback may take a while; if the session changed
+                // underneath it (`reset()`, a different user identified, or the
+                // app installed a newer token itself) the result belongs to a
+                // session that no longer exists — don't graft it onto the new one.
+                guard config.distinctID == distinctID, config.userToken == userToken else {
+                    logger.warning("[SuprSend]: Session changed while refreshing userToken, discarding refreshed token")
+                    return
+                }
+
+                _ = await config.identify(
+                    distinctID: distinctID,
+                    userToken: newUserToken,
+                    options: config.authenticateOptions
+                )
+            } catch {
+                logger.warning("[SuprSend]: Couldn't fetch new userToken: \(error.localizedDescription)")
+            }
+        }
+    }
+
     /// Makes an API request using the given data.
     /// - Parameter reqData: The data to use for the API request.
     /// - Returns: A response object representing the result of the API request.
     func request<R: Response>(reqData: HandleRequest) async -> R {
-        guard let distinctID = config.distinctID else {
+        guard config.distinctID != nil else {
             return .error(
                 .init(
                     type: .validation,
@@ -108,34 +180,7 @@ class APIClient {
                 ))
         }
 
-        if let refreshUserToken = config.authenticateOptions?.refreshUserToken,
-            let userToken = config.userToken
-        {
-            
-            let jwtPayload = try? Utils.shared.decode(jwtToken: userToken)
-            let expiresOn = (jwtPayload?[Constants.expiryKeyJWT] as? Double ?? .zero)
-            let now = Date.now.timeIntervalSince1970
-            let hasExpired = expiresOn <= now
-            
-            if hasExpired {
-                do {
-                    let newUserToken = try await refreshUserToken(
-                        userToken,
-                        jwtPayload ?? .init()
-                    )
-                    
-                    if let newUserToken {
-                        _ = await config.identify(
-                            distinctID: distinctID,
-                            userToken: newUserToken,
-                            options: config.authenticateOptions
-                        )
-                    }
-                } catch {
-                    // error while getting token go ahead with calling api
-                }
-            }
-        }
+        await refreshExpiringUserToken()
 
         do {
             return try await requestApiInstance(reqData: reqData)
@@ -208,5 +253,29 @@ class APIClient {
         }
 
         return .error(.init(type: .unknown, message: nil), statusCode: httpResponse?.statusCode)
+    }
+}
+
+/// Coalesces concurrent invocations of an async operation: callers arriving
+/// while a run is in flight await that same run instead of starting another.
+actor SharedInflightTask {
+    private var inflight: Task<Void, Never>?
+
+    func run(_ operation: @escaping @Sendable () async -> Void) async {
+        if inflight == nil {
+            // The task inherits this actor's isolation, so `finish()` runs
+            // isolated as soon as the operation returns — there's no window in
+            // which `inflight` still points at a completed run.
+            inflight = Task {
+                await operation()
+                self.finish()
+            }
+        }
+
+        await inflight?.value
+    }
+
+    private func finish() {
+        inflight = nil
     }
 }
