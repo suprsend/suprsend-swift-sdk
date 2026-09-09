@@ -57,7 +57,7 @@ public class SuprSendClient: NSObject {
     ///
     /// This is *session* state, not build config: set it at login via
     /// ``identify(distinctID:userToken:tenantId:options:)`` and switch it at
-    /// runtime via ``changeTenant(tenantId:)``. A per-call `tenantId` (on
+    /// runtime via ``changeTenant(tenantId:pushTokenAction:)``. A per-call `tenantId` (on
     /// ``track(event:properties:tenantId:)``, ``Preferences/Args`` or
     /// ``IFeedOptions``) always overrides this value.
     public private(set) var tenantId: String?
@@ -190,7 +190,7 @@ public class SuprSendClient: NSObject {
     ///   - tenantId: Tenant the user is logging into. Stored as the global
     ///     ``tenantId`` and applied to subsequent preferences/feed calls. When
     ///     the user's token scopes multiple tenants, switch between them at
-    ///     runtime with ``changeTenant(tenantId:)`` — no re-identify needed.
+    ///     runtime with ``changeTenant(tenantId:pushTokenAction:)`` — no re-identify needed.
     ///   - options: Authenticate Options
     /// - Returns: Respnose from the API call
     public func identify(
@@ -294,18 +294,69 @@ public class SuprSendClient: NSObject {
     /// Intended for users whose token scopes multiple tenants (a `tenant_id`
     /// array): identify once, then call this to move between them without
     /// resetting the session. Updates the global ``tenantId`` used by
-    /// subsequent preferences requests and newly-initialised feeds.
+    /// subsequent events, preferences requests and newly-initialised feeds.
     ///
     /// - Note: Already-running feed instances keep the tenant they were
     ///   initialised with — re-initialise a feed (via ``feeds``) to have it
     ///   reflect the new tenant. Re-fetch preferences (``Preferences/getPreferences(args:)``)
     ///   to load the new tenant's data.
-    /// - Parameter tenantId: The tenant to switch to.
-    @objc public func changeTenant(tenantId: String) {
-        if !isIdentified(checkUserToken: false) {
+    /// - Parameters:
+    ///   - tenantId: The tenant to switch to.
+    ///   - pushTokenAction: What to do with the device's push token. `.none`
+    ///     (default) leaves it attached to the current tenant; `.copy` attaches
+    ///     it to the new tenant as well; `.move` detaches it from the current
+    ///     tenant and attaches it to the new one. A device with no push token
+    ///     switches tenant successfully regardless.
+    /// - Returns: `.success()` once the tenant is switched. With `.copy` or
+    ///   `.move`, a failure to attach the token to the new tenant restores the
+    ///   previous tenant (re-attaching the token to it for `.move`) and returns
+    ///   that error, so the session never ends up on a tenant without the
+    ///   token the caller asked for.
+    @objc public func changeTenant(
+        tenantId: String,
+        pushTokenAction: PushTokenAction = .none
+    ) async -> APIResponse {
+        guard !tenantId.isEmpty else {
+            return .error(.init(type: .validation, message: "tenantId is missing or invalid"))
+        }
+
+        let identified = isIdentified(checkUserToken: false)
+        if !identified {
             logger.warning("[SuprSend]: changeTenant called before identify. Tenant will apply once a user is identified.")
         }
+
+        let oldTenantId = self.tenantId
+        // Only touch the token when there's something to do: an identified
+        // user, an actual tenant change, and a token on this device.
+        let attachPush = pushTokenAction != .none
+            && identified
+            && oldTenantId != tenantId
+            && push.pushSubscribed()
+
+        if attachPush, pushTokenAction == .move {
+            // Detach while still scoped to the old tenant.
+            let removeResp = await push.removePushSubscription()
+            if removeResp.status == .error {
+                return removeResp
+            }
+        }
+
         self.tenantId = tenantId
+
+        if attachPush {
+            // Attach under the new tenant. On failure roll the session back so
+            // the caller isn't left on a tenant the token never reached.
+            let updateResp = await push.updatePushSubscription()
+            if updateResp.status == .error {
+                self.tenantId = oldTenantId
+                if pushTokenAction == .move {
+                    await push.updatePushSubscription()
+                }
+                return updateResp
+            }
+        }
+
+        return .success()
     }
 
     /// Track event with given properties
@@ -314,7 +365,7 @@ public class SuprSendClient: NSObject {
     ///   - properties: Properties for the event
     ///   - tenantId: Tenant to attribute this single event to. When `nil` the
     ///     global ``tenantId`` is used. Scoping one event this way does not
-    ///     change the session tenant — use ``changeTenant(tenantId:)`` for that.
+    ///     change the session tenant — use ``changeTenant(tenantId:pushTokenAction:)`` for that.
     /// - Returns: Response from the API call
     public func track(
         event: String,

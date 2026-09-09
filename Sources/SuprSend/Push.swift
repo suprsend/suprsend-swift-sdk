@@ -53,22 +53,34 @@ public class Push {
         return nil
     }
 
-    /// Updates the push subscription by adding it to the user's configuration.
-    /// - Note: This method will only update the subscription if one is available.
-    public func updatePushSubscription() async {
-        let subscription = await getPushSubscription()
-        if let subscription {
-            _ = await self.config.user.addiOSPush(subscription)
-        }
+    /// Whether the device currently has a push token the SDK can attach to a
+    /// tenant. Mirrors `pushSubscribed()` in suprsend-web-sdk.
+    public func pushSubscribed() -> Bool {
+        config.deviceToken != nil
     }
 
-    /// Removes the push subscription from the user's configuration.
-    /// - Note: This method will only remove the subscription if one is available.
-    public func removePushSubscription() async {
-        let subscription = await getPushSubscription()
-        if let subscription {
-            _ = await self.config.user.removeiOSPush(subscription)
+    /// Attaches the device's push token to the identified user on the active
+    /// tenant.
+    /// - Returns: The API response, or a `.notFound` error when the device has
+    ///   no push token yet (in which case nothing is sent).
+    @discardableResult
+    public func updatePushSubscription() async -> APIResponse {
+        guard let subscription = await getPushSubscription() else {
+            return .error(.init(type: .notFound, message: "Push subscription not found"))
         }
+        return await config.user.addiOSPush(subscription)
+    }
+
+    /// Detaches the device's push token from the identified user on the active
+    /// tenant.
+    /// - Returns: The API response, or a `.notFound` error when the device has
+    ///   no push token (in which case nothing is sent).
+    @discardableResult
+    public func removePushSubscription() async -> APIResponse {
+        guard let subscription = await getPushSubscription() else {
+            return .error(.init(type: .notFound, message: "Push subscription not found"))
+        }
+        return await config.user.removeiOSPush(subscription)
     }
 
     /// Retrieves the current notification permission status.

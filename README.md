@@ -26,7 +26,7 @@ In second dialog box, select your project's target from dropdown and click `Add 
 **For SDK version `1.1.0` onwards**, add the SDK to your Podfile using the GitHub source and run `pod install`:
 
 ```ruby
-pod 'SuprSendSwift', :git => 'https://github.com/suprsend/suprsend-swift-sdk.git', :tag => '2.1.0'
+pod 'SuprSendSwift', :git => 'https://github.com/suprsend/suprsend-swift-sdk.git', :tag => '2.2.0'
 ```
 
 **For SDK versions till `1.0.1`**, add the SuprSendSwift SDK to your Podfile as `pod "SuprSendSwift"` and run `pod install` to install the SDK.
@@ -84,18 +84,25 @@ await SuprSend.shared.reset()
 
 ## Change active tenant
 
-Use the below method to switch the active tenant of identified user. This is meant for users whose `userToken` scopes multiple tenants (`scope.tenant_id` as an array) - identify once and switch between them without resetting the session.
+Once a tenant is set in `identify`, all SDK calls (events, preferences, in-app feed) are scoped to the active tenant. Use the below method to switch the active tenant of identified user. This is meant for users whose `userToken` scopes multiple tenants (`scope.tenant_id` as an array) - identify once and switch between them without resetting the session.
 
 ```swift
-SuprSend.shared.changeTenant(tenantId: "TENANT_ID")
+let response = await SuprSend.shared.changeTenant(tenantId: "TENANT_ID", pushTokenAction: .none)
 ```
 
-| Properties | Description                                                                                                                                 |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| tenantId\* | Tenant to switch to. Used by subsequent preferences requests and newly initialized feeds. Must be one of the tenants scoped in `userToken`. |
+| Properties      | Description                                                                                                                                                                                                                                  |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| tenantId\*      | Tenant to switch to. Used by subsequent events, preferences requests and newly initialized feeds. Must be one of the tenants scoped in `userToken`.                                                                                          |
+| pushTokenAction | What to do with the device's push token. `.none` (default) leaves it attached to the current tenant. `.copy` attaches it to the new tenant as well. `.move` detaches it from the current tenant and attaches it to the new tenant.           |
+
+**Returns:** `async -> APIResponse`
 
 > **Note**
 > Already running feed instances keep the tenant they were initialized with - re-initialize the feed to reflect the new tenant, and call `getPreferences` again to load the new tenant's data.
+>
+> With `.copy` or `.move`, if the device has no push token the tenant switch still succeeds. If attaching the token to the new tenant fails, the active tenant is restored (and re-attached for `.move`) and the error is returned.
+>
+> `changeTenant` is `async` from `2.2.0` onwards - call it with `await` (previously it was synchronous and returned nothing).
 
 ## Response Structure
 

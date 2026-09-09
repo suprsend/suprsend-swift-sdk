@@ -40,7 +40,8 @@ struct RootView: View {
 
     private func handleLogout() {
         Task {
-            await SuprSend.shared.push.removePushSubscription()
+            // reset() detaches the push token itself (unsubscribePush defaults
+            // to true), so no separate removePushSubscription() call is needed.
             _ = await SuprSend.shared.reset()
             await MainActor.run {
                 distinctID = ""

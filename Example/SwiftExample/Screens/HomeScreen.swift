@@ -133,17 +133,27 @@ struct HomeScreen: View {
         let trimmed = tenantInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed != tenantID else { return }
 
-        // Update the SDK's global tenant. Subsequent track/preferences/feed
-        // calls are scoped to it.
-        SuprSend.shared.changeTenant(tenantId: trimmed)
-        tenantID = trimmed
+        Task { @MainActor in
+            // Update the SDK's global tenant. Subsequent track/preferences/feed
+            // calls are scoped to it. `.none` leaves the device's push token on
+            // the previous tenant; pass `.copy` or `.move` to carry it across.
+            let response = await SuprSend.shared.changeTenant(
+                tenantId: trimmed,
+                pushTokenAction: .move
+            )
+            guard response.status == .success else {
+                ToastCenter.shared.show(response.error?.message ?? "Couldn't switch tenant")
+                return
+            }
+            tenantID = trimmed
 
-        // Already-running feeds keep their original tenant, so re-initialise the
-        // inbox feed to load the new tenant's notifications. Preferences re-fetch
-        // on their own when that screen is next opened.
-        inboxViewModel.reconnectAndRefresh()
+            // Already-running feeds keep their original tenant, so re-initialise the
+            // inbox feed to load the new tenant's notifications. Preferences re-fetch
+            // on their own when that screen is next opened.
+            inboxViewModel.reconnectAndRefresh()
 
-        ToastCenter.shared.show("Switched to tenant \(trimmed)")
+            ToastCenter.shared.show("Switched to tenant \(trimmed)")
+        }
     }
 
     private var inboxButton: some View {
