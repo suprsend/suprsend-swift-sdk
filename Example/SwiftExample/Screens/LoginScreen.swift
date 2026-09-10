@@ -1,10 +1,6 @@
 import SwiftUI
 
 struct LoginScreen: View {
-    /// Called with the trimmed distinct id, tenant id, and whether user-token
-    /// auth is enabled. The tenant id is empty when the field is left blank
-    /// (no global tenant). When `enableUserToken` is false the user is
-    /// identified with just the distinct id — no JWT fetch, no refresh callback.
     let onSubmit: (String, String, Bool) -> Void
     @State private var distinctID: String = ""
     @State private var tenantID: String = ""

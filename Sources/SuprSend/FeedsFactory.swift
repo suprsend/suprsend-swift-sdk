@@ -1,10 +1,3 @@
-//
-//  FeedsFactory.swift
-//  SuprSend
-//
-//  Created by Ram Suthar on 31/07/25.
-//
-
 import Foundation
 
 public class FeedsFactory {

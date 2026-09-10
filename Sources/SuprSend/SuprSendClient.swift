@@ -1,10 +1,3 @@
-//
-//  SuprSend.swift
-//  SuprSend
-//
-//  Created by Ram Suthar on 24/08/24.
-//
-
 import Foundation
 
 @objc public protocol SuprSendDeepLinkDelegate: AnyObject {
@@ -67,14 +60,8 @@ public class SuprSendClient: NSObject {
     private var apiClient: APIClient?
     private(set) var authenticateOptions: AuthenticateOptions?
 
-    /// Fully-resolved user-agent payload sent on every request as JSON in the
-    /// `X-Suprsend-Client-User-Agent` header.
     private(set) var clientUserAgent: ClientUserAgentConfig
-    /// Compact string form sent on every request in the `X-Suprsend-User-Agent`
-    /// header.
     private(set) var userAgent: String
-    /// Pre-encoded JSON form of ``clientUserAgent`` so `APIClient` doesn't
-    /// re-encode on every request.
     private(set) var clientUserAgentJSON: String
 
     /// User instance
@@ -127,9 +114,7 @@ public class SuprSendClient: NSObject {
         self.userAgent = buildUserAgent(resolvedUA)
         self.clientUserAgentJSON = encodeClientUserAgent(resolvedUA)
 
-        // Now that the public key is set, retry any events queued before it was
-        // available — e.g. a notification tap handled on a cold (killed-state)
-        // launch, where this configure() runs after the native push callback.
+        // Retry events queued before the public key existed (cold-start notification tap).
         self.push.flushPendingEvents()
     }
     
@@ -137,8 +122,6 @@ public class SuprSendClient: NSObject {
         self.urlDelegate = urlDelegate
     }
     
-    /// Get the APIClient instance for this SuprSend instance.
-    /// - Returns: The APIClient instance, or nil if not yet initialized.
     func client() -> APIClient {
         if distinctID == nil {
             logger.warning("[SuprSend]: distinctId is missing. User should be authenticated")
@@ -167,10 +150,6 @@ public class SuprSendClient: NSObject {
         return apiClient
     }
 
-    /// Send an event API request with the given payload.
-    /// - Parameters:
-    ///   - payload: The event data to send.
-    /// - Returns: The response from the API call.
     func eventApi(payload: AnyEncodable) async -> APIResponse {
         let response: APIResponse = await client().request(reqData: .init(path: "v2/event", payload: payload, type: .post))
         switch response.status {
@@ -200,7 +179,6 @@ public class SuprSendClient: NSObject {
         options: AuthenticateOptions? = nil
     ) async -> APIResponse {
 
-        // other user already present
         guard (self.distinctID == nil || distinctID == self.distinctID) else {
             return .error(
                 .init(
@@ -210,25 +188,16 @@ public class SuprSendClient: NSObject {
             )
         }
 
-        // Set the tenant for this session before any request goes out. Placed
-        // after the "other user" guard so a rejected identify doesn't mutate
-        // the current user's tenant. `nil` (e.g. token-refresh re-identify)
-        // leaves the existing tenant untouched.
         if let tenantId {
             self.tenantId = tenantId
         }
 
-        // updating usertoken for existing user
         if self.apiClient != nil,
             self.distinctID == distinctID,
             self.userToken != userToken
         {
-            // `APIClient` reads the token live on every request, so it doesn't
-            // need rebuilding — and keeping the same instance keeps its
-            // in-flight refresh coalescer alive for the whole session.
+            // Keep the same APIClient: it reads the token live and owns the in-flight refresh coalescer.
             self.userToken = userToken
-            // `nil` keeps the existing options (this is how the internal token
-            // refresh re-identifies); pass options to replace them.
             if let options {
                 self.authenticateOptions = options
             }
@@ -236,7 +205,6 @@ public class SuprSendClient: NSObject {
             return .success()
         }
 
-        // ignore more than one identify call
         if self.distinctID != nil, self.apiClient != nil {
             return .success()
         }
@@ -249,13 +217,11 @@ public class SuprSendClient: NSObject {
         let authenticatedDistinctID = Utils.shared.getLocalStorageData(
             key: Constants.authenticatedDistinctID)
 
-        // already loggedin
         if authenticatedDistinctID == self.distinctID {
             await push.updatePushSubscription()
             return .success()
         }
 
-        // first time login
         let resp = await self.eventApi(
             payload: .init(
                 Event(
@@ -326,15 +292,12 @@ public class SuprSendClient: NSObject {
         }
 
         let oldTenantId = self.tenantId
-        // Only touch the token when there's something to do: an identified
-        // user, an actual tenant change, and a token on this device.
         let attachPush = pushTokenAction != .none
             && identified
             && oldTenantId != tenantId
             && push.pushSubscribed()
 
         if attachPush, pushTokenAction == .move {
-            // Detach while still scoped to the old tenant.
             let removeResp = await push.removePushSubscription()
             if removeResp.status == .error {
                 return removeResp
@@ -344,8 +307,6 @@ public class SuprSendClient: NSObject {
         self.tenantId = tenantId
 
         if attachPush {
-            // Attach under the new tenant. On failure roll the session back so
-            // the caller isn't left on a tenant the token never reached.
             let updateResp = await push.updatePushSubscription()
             if updateResp.status == .error {
                 self.tenantId = oldTenantId
@@ -399,10 +360,7 @@ public class SuprSendClient: NSObject {
             validatedProperties = .init()
         }
 
-        // Public notification events ($notification_clicked/_delivered/_dismiss)
-        // omit tenant_id — the tenant is resolved server-side from the
-        // notification id, and this path can run unidentified (Notification
-        // Service Extension / cold start) where no reliable tenant exists.
+        // Public notification events omit tenant_id; the server resolves it from the notification id.
         let event = Event(
             event: event,
             insertID: UUID().uuidString,

@@ -1,10 +1,3 @@
-//
-//  File.swift
-//  SuprSend
-//
-//  Created by Ram Suthar on 01/09/25.
-//
-
 import Foundation
 
 enum AnyDecodable: Decodable {

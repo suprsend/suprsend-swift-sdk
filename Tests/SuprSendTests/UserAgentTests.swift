@@ -1,8 +1,3 @@
-//
-//  UserAgentTests.swift
-//  SuprSendTests
-//
-
 import Testing
 import Foundation
 @testable import SuprSend
@@ -15,8 +10,6 @@ struct UserAgentTests {
         #expect(ua.sdk == Constants.sdkName)
         #expect(ua.sdkVersion == Constants.sdkVersion)
         #expect(ua.lang == "swift")
-        // langVersion is detected at compile time via `swift(>=X.Y)` rungs;
-        // anything from Swift 5.6 upward should populate a non-empty value.
         #expect(!(ua.langVersion?.isEmpty ?? true))
 
         #if os(iOS)
@@ -31,9 +24,6 @@ struct UserAgentTests {
         #expect(!(ua.osVersion?.isEmpty ?? true))
         #endif
 
-        // device_model: nil on simulators that don't expose hw.machine,
-        // non-empty otherwise. Either is acceptable; assert it isn't an empty
-        // string when present.
         if let model = ua.deviceModel {
             #expect(!model.isEmpty)
         }
@@ -58,26 +48,21 @@ struct UserAgentTests {
     }
 
     @Test func appInfoWithoutNameIsDropped() {
-        // Only a version, no name — entire app_info block should be omitted.
         let ua = buildClientUserAgent(
             appInfo: AppInfo(version: "1.2.3")
         )
         #expect(ua.appInfo == nil)
 
-        // Empty-string name should also be treated as "no name".
         let ua2 = buildClientUserAgent(
             appInfo: AppInfo(name: "", version: "1.2.3")
         )
         #expect(ua2.appInfo == nil)
 
-        // Same rule applies when the missing name comes from the override
-        // shadowing the underlying appInfo's name with nothing.
         let ua3 = buildClientUserAgent(
             override: ClientUserAgentConfig(appInfo: AppInfo(version: "9.9"))
         )
         #expect(ua3.appInfo == nil)
 
-        // And confirm it stays out of the JSON payload.
         let json = encodeClientUserAgent(ua)
         #expect(!json.contains("\"app_info\""))
     }
@@ -88,7 +73,6 @@ struct UserAgentTests {
         )
 
         #expect(ua.platform == "custom-platform")
-        // Unrelated defaults still populated
         #expect(ua.sdk == Constants.sdkName)
         #expect(ua.lang == "swift")
     }
@@ -101,8 +85,8 @@ struct UserAgentTests {
             )
         )
 
-        #expect(ua.appInfo?.name == "BaseApp")     // preserved
-        #expect(ua.appInfo?.version == "9.9.9")     // overridden
+        #expect(ua.appInfo?.name == "BaseApp")
+        #expect(ua.appInfo?.version == "9.9.9")
     }
 
     @Test func userAgentStringIncludesSdkAndOs() {
@@ -163,7 +147,6 @@ struct UserAgentTests {
         let json = encodeClientUserAgent(ua)
 
         #expect(json.contains("\"lang_version\":\"5.10\""))
-        // langVersion (camelCase) must not leak to the wire
         #expect(!json.contains("\"langVersion\""))
     }
 
@@ -192,11 +175,9 @@ struct UserAgentTests {
         #expect(json.contains("\"os_version\":\"17.0\""))
         #expect(json.contains("\"app_info\""))
         #expect(json.contains("\"device_model\":\"iPhone14,3\""))
-        // environment was nil — must not appear in payload
         #expect(!json.contains("\"environment\""))
         #expect(!json.contains("null"))
 
-        // Round-trip parse to confirm it's valid JSON
         let data = try #require(json.data(using: .utf8))
         let parsed = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         #expect(parsed?["sdk"] as? String == "test-sdk")

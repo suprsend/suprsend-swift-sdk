@@ -1,10 +1,3 @@
-//
-//  Emitter.swift
-//  SuprSend
-//
-//  Created by Ram Suthar on 15/09/24.
-//
-
 import Foundation
 import Combine
 
@@ -40,10 +33,6 @@ public class Emitter {
             .store(in: &subscriptions)
     }
 
-    /// Emits a specified event with associated data.
-    /// - Parameters:
-    ///   - event: The event to emit.
-    ///   - data: The data associated with the emitted event.
     func emit(event: Event, data: PreferenceAPIResponse) {
         eventPublisher.send(.init(event: event, data: data))
     }

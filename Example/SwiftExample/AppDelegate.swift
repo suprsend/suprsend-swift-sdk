@@ -19,7 +19,6 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         if let storedDistinctID = UserDefaults.standard.string(forKey: StorageKeys.distinctID),
            !storedDistinctID.isEmpty {
             let storedTenantID = UserDefaults.standard.string(forKey: StorageKeys.tenantID)
-            // Defaults to true when never set, matching the login form default.
             let enableUserToken = UserDefaults.standard.object(forKey: StorageKeys.enableUserToken) as? Bool ?? true
             Task {
                 await SuprSendTokenService.identify(

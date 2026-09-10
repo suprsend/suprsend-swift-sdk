@@ -1,10 +1,3 @@
-//
-//  Feed.swift
-//  SuprSend
-//
-//  Created by Ram Suthar on 30/07/25.
-//
-
 import Foundation
 import Combine
 
@@ -19,7 +12,6 @@ private enum FeedConstants {
 
 /// A class responsible for handling inbox feed.
 public class Feed {
-    /// The configuration instance used to manage user data.
     private let config: SuprSendClient
     
     private let feedOptions: IFeedOptions
@@ -34,9 +26,6 @@ public class Feed {
 
     private var cancellables = Set<AnyCancellable>()
 
-    /// Monotonic counter bumped whenever in-flight fetches should be considered
-    /// stale (e.g. on store switch). Fetch checks this after each `await` and
-    /// bails if it changed.
     private var fetchGeneration = 0
     
     public var data: IFeedData {
@@ -51,12 +40,9 @@ public class Feed {
         )
     }
     
-    /// Initializes a new `Feed` instance with the given configuration.
-    /// - Parameter config: The configuration instance to use.
     init(config: SuprSendClient, options: IFeedOptions? = nil) {
         self.config = config
         
-        // Set options
         var pageSize = FeedConstants.pageSize
         if let pageSizeOption = options?.pageSize,
            1...FeedConstants.maxPageSize ~= pageSizeOption {
@@ -69,7 +55,6 @@ public class Feed {
             host: options?.host
         )
         
-        // Create feed store
         self.store = .init(
             .init(
                 notifications: [],
@@ -213,9 +198,6 @@ extension Feed {
             store.send(storeData.with(apiStatus: .fetchingMore))
         } else {
             store.send(storeData.with(apiStatus: .loading))
-            // Fire badge-count refresh in parallel with the first-page request,
-            // mirroring the web SDK which doesn't await it. fetchCount updates
-            // the store independently when it resolves.
             Task { [weak self] in
                 _ = await self?.fetchCount()
             }
@@ -585,7 +567,6 @@ extension Feed {
         var meta = storeData.meta
         meta["badge"] = "0"
         
-        // optimistic update
         store.send(storeData.with(meta: meta))
         
         let url = getUrl(path: "reset_bell_count", qp: [
@@ -649,10 +630,7 @@ extension Feed {
         if (expiryTimerTask != nil) {
             return
         }
-        // Use Task.sleep rather than Timer.scheduledTimer because `fetch()` is
-        // async and frequently resumes on a cooperative-pool thread whose run
-        // loop isn't running, which would silently prevent the Timer from
-        // firing. Mirrors the keep-alive pattern in SocketClient.
+        // Task.sleep, not Timer: cooperative-pool threads have no run loop.
         expiryTimerTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 30_000_000_000)
@@ -670,9 +648,7 @@ extension Feed {
 
         let notifications = storeData.notifications.filter(
             { (notification: IRemoteNotification) in
-                // `expiry` is delivered by the backend in milliseconds since
-                // epoch (consistent with `created_on`), so convert to seconds
-                // before comparing with `Date.now`.
+                // expiry is in milliseconds, like created_on.
                 let expired = notification.expiry != nil
                 ? Date.now > Date(timeIntervalSince1970: notification.expiry! / 1000)
                 : false
@@ -822,12 +798,10 @@ extension Feed {
         return sameRead && sameTags && sameCategory && sameArchived
     }
     
-    
     private func orderNotificationsBasedOnPinFlag(
         newNotification: IRemoteNotification,
         existingNotifications: [IRemoteNotification]
     ) -> [IRemoteNotification] {
-        // if pinned notification add new notification append at start else at end of pinned notifications
         if (newNotification.is_pinned) {
             return [newNotification] + existingNotifications
         } else {
@@ -925,23 +899,13 @@ extension Feed {
             .store(in: &cancellables)
     }
 
-    /// Refreshes the user token if it has expired or is about to — sharing the
-    /// same on-demand refresh flow (and in-flight dedup) as API calls — then
-    /// pushes the current auth headers into `SocketClient` so the next
-    /// reconnect attempt uses fresh credentials. The first attempt is
-    /// scheduled 1s out, so a slow refresh callback may miss it and land on
-    /// the following one; `SocketClient` keeps retrying with backoff.
     private func handleSocketConnectionLost() async {
-        // `connectionLost` can still be delivered after `remove()` tore the
-        // socket down — a dead feed must not poke the (possibly new) session.
+        // connectionLost can arrive after remove(); a dead feed must not touch the session.
         guard socket != nil else { return }
 
-        // No-ops when there's no token / refresh callback or nothing is expiring.
         await config.client().refreshExpiringUserToken()
 
-        // Always re-sync rather than only when a refresh just ran: the token may
-        // have changed since the socket connected (an API call refreshed it, or
-        // the app re-identified with a new one), leaving the socket's copy stale.
+        // Always re-sync: an API call may have refreshed the token since the socket connected.
         socket?.updateHeaders(socketHeaders())
     }
 
@@ -950,7 +914,6 @@ extension Feed {
         var meta = storeData.meta
         meta["badge"] = "0"
         
-        // optimistic update
         store.send(storeData.with(meta: meta))
         
         emitter.send(.storeUpdate(self.data))
@@ -993,7 +956,6 @@ extension Feed {
             }
         }
         
-        // update overall badge count as well if it belongs any of store current store
         let badge = newMetaData["badge"]
         let plusBadge = String((Int(badge ?? "0") ?? 0) + 1)
         newMetaData["badge"] = emitNewNotificationEvent ? plusBadge : badge
@@ -1006,7 +968,6 @@ extension Feed {
         emitter.send(.storeUpdate(self.data))
     }
 
-    
     private func handleNotificationUpdateSocketEvent(data: [String: AnyDecodable]?) async {
         guard let nid = data?["n_id"],
               case .string(let notificationId) = nid else { return }
@@ -1031,7 +992,6 @@ extension Feed {
         
         if (notificationBelongsToStore) {
             if (!notificationPresent) {
-                // Insert new notification
                 store.send(
                     store.value.with(
                         notifications: orderNotificationsBasedOnPinFlag(
@@ -1041,7 +1001,6 @@ extension Feed {
                     )
                 )
             } else {
-                // Update existing notification data
                 store.send(
                     store.value.with(
                         notifications: storeData.notifications.compactMap {
@@ -1050,7 +1009,6 @@ extension Feed {
                 )
             }
         } else {
-            // Filter out notification
             store.send(
                 store.value.with(
                     notifications: storeData.notifications.filter {
@@ -1061,7 +1019,6 @@ extension Feed {
         
         emitter.send(.storeUpdate(self.data))
     }
-    
     
     private func handleBulkNotificationUpdateSocketEvent(data: [String: AnyDecodable]?) async {
         guard let data else {

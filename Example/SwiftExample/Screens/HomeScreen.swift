@@ -89,8 +89,6 @@ struct HomeScreen: View {
         .onAppear { tenantInput = tenantID }
     }
 
-    /// Switches the active tenant at runtime. The user's token must scope the
-    /// target tenant (a `tenant_id` array in the JWT) — no re-identify needed.
     private var tenantSwitcher: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("ACTIVE TENANT")
@@ -134,9 +132,6 @@ struct HomeScreen: View {
         guard !trimmed.isEmpty, trimmed != tenantID else { return }
 
         Task { @MainActor in
-            // Update the SDK's global tenant. Subsequent track/preferences/feed
-            // calls are scoped to it. `.none` leaves the device's push token on
-            // the previous tenant; pass `.copy` or `.move` to carry it across.
             let response = await SuprSend.shared.changeTenant(
                 tenantId: trimmed,
                 pushTokenAction: .move
@@ -147,9 +142,6 @@ struct HomeScreen: View {
             }
             tenantID = trimmed
 
-            // Already-running feeds keep their original tenant, so re-initialise the
-            // inbox feed to load the new tenant's notifications. Preferences re-fetch
-            // on their own when that screen is next opened.
             inboxViewModel.reconnectAndRefresh()
 
             ToastCenter.shared.show("Switched to tenant \(trimmed)")
@@ -175,10 +167,6 @@ struct HomeScreen: View {
         }
     }
 
-    /// Every user-property method in both call styles: the single key/value
-    /// convenience and the dictionary form. Both funnel into the same
-    /// `UserProperty` encoding path, so this doubles as a live regression
-    /// check for the PR #7 crash.
     private var userMethodsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             sectionHeader("USER METHODS — KEY/VALUE VS DICTIONARY")
@@ -233,7 +221,6 @@ struct HomeScreen: View {
         }
     }
 
-    /// Add/remove pairs for every channel method, plus the two channel setters.
     private var channelMethodsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             sectionHeader("CHANNEL METHODS — ADD / REMOVE")
@@ -303,7 +290,6 @@ struct HomeScreen: View {
             .kerning(0.5)
     }
 
-    /// A compact button that fires one SDK call and toasts the outcome.
     @ViewBuilder
     private func testButton(_ title: String, call: @escaping () async -> APIResponse) -> some View {
         Button {

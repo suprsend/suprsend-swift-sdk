@@ -1,10 +1,3 @@
-//
-//  Push.swift
-//  SuprSend
-//
-//  Created by Ram Suthar on 30/08/24.
-//
-
 import Foundation
 import UserNotifications
 #if os(iOS) || os(watchOS) || os(tvOS)
@@ -17,29 +10,21 @@ import UIKit.UIApplication
 
 /// A class responsible for handling push notifications.
 public class Push {
-    /// The configuration instance used to manage user data.
     private let config: SuprSendClient
     
     private let queue: PushQueue
     
     var delegate: SuprSendPushNotificationDelegate?
 
-    /// Initializes a new `Push` instance with the given configuration.
-    /// - Parameter config: The configuration instance to use.
     init(config: SuprSendClient) {
         self.config = config
         self.queue = PushQueue(config: config)
     }
 
-    /// Retries any persisted/pending push events. Invoked from `configure()` so
-    /// events queued before the public key was set (e.g. a notification tap from
-    /// a killed state) are sent once the key becomes available.
     func flushPendingEvents() {
         queue.flushPendingEvents()
     }
 
-    /// Retrieves the push subscription, if available.
-    /// - Returns: The push subscription as a string, or `nil` if not available.
     func getPushSubscription() async -> String? {
         if let token = config.deviceToken {
             return token
@@ -191,7 +176,6 @@ extension Push {
         Task {
             await trackNotificationDelivered(userInfo: notification.request.content.userInfo)
             
-            // Notification is presented while app is in active use and seen by user.
             await trackNotificationClicked(userInfo: notification.request.content.userInfo)
         }
     }

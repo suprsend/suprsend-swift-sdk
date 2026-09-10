@@ -1,10 +1,3 @@
-//
-//  APIResponse.swift
-//  SuprSend
-//
-//  Created by Ram Suthar on 24/08/24.
-//
-
 import Foundation
 
 /// A type alias for a HTTP status code.
@@ -133,7 +126,6 @@ public class APIResponse: NSObject, Response {
 }
 
 extension Response {
-    /// Creates a new instance of the response struct with a success status.
     static func success(
         statusCode: StatusCode? = nil,
         body: Body? = nil
@@ -146,7 +138,6 @@ extension Response {
         )
     }
 
-    /// Creates a new instance of the response struct with an error status.
     static func error(
         _ error: ResponseError?,
         statusCode: StatusCode? = nil

@@ -1,10 +1,3 @@
-//
-//  File.swift
-//  SuprSend
-//
-//  Created by Ram Suthar on 30/07/25.
-//
-
 import Foundation
 
 /// Configuration options

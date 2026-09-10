@@ -1,10 +1,3 @@
-//
-//  FeedCountAPIResponse.swift
-//  SuprSend
-//
-//  Created by Ram Suthar on 31/07/25.
-//
-
 import Foundation
 
 public struct FeedCountAPIResponse: Response {

@@ -37,7 +37,6 @@ final class InboxViewModel: ObservableObject {
         IFeedOptions(tenantId: nil, pageSize: 10, stores: stores, host: feedHost)
     }
 
-    /// Nil when neither host is configured, so the SDK's own defaults apply.
     private static var feedHost: FeedHost? {
         guard SuprSendConstants.feedAPIHost != nil || SuprSendConstants.feedSocketHost != nil else {
             return nil

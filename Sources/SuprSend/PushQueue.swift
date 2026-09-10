@@ -1,10 +1,3 @@
-//
-//  PushQueue.swift
-//  SuprSend
-//
-//  Created by Ram Suthar on 03/10/24.
-//
-
 import Foundation
 
 class PushQueue {
@@ -13,12 +6,9 @@ class PushQueue {
     
     let config: SuprSendClient
 
-    //declare this property where it won't go out of scope relative to your listener
     let reachability = try! Reachability()
 
-    // Serializes all access to `items` so concurrent flushes (e.g. a cold-start
-    // notification tap on a background Task and configure() on the main thread)
-    // can't mutate the array at the same time.
+    // Serialises items against concurrent flushes (cold-start tap vs configure()).
     private let syncQueue = DispatchQueue(label: "com.suprsend.pushQueue")
     
     init(config: SuprSendClient) {
@@ -60,9 +50,6 @@ class PushQueue {
         flush()
     }
 
-    /// Retries any persisted/pending events. Called after `configure()` so a
-    /// cold-start event queued before the public key was set (e.g. a
-    /// notification tap from a killed state) gets sent once the key is available.
     func flushPendingEvents() {
         flush()
     }
@@ -73,11 +60,7 @@ class PushQueue {
             Task {
                 let response = await triggetEvent(item: item)
 
-                // Remove only after a confirmed send. If the send fails or the
-                // app is killed mid-send, the item stays persisted and is retried
-                // on the next flush/launch — so events are never lost. A flush
-                // overlapping an in-flight send may resend it (duplicates are
-                // acceptable; lost events are not).
+                // Remove only after a confirmed send: duplicates are acceptable, lost events are not.
                 if response.status != .error {
                     syncQueue.sync {
                         if let index = items.firstIndex(of: item) {

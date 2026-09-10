@@ -1,10 +1,3 @@
-//
-//  ResetOption.swift
-//  SuprSend
-//
-//  Created by Ram Suthar on 25/08/24.
-//
-
 import Foundation
 
 public struct ResetOption {

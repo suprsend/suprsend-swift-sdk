@@ -1,10 +1,3 @@
-//
-//  PreferenceOptions.swift
-//  SuprSend
-//
-//  Created by Ram Suthar on 16/09/24.
-//
-
 import Foundation
 
 public enum PreferenceOptions: String, Codable {
@@ -63,9 +56,6 @@ public class Category: Codable {
     /// The preference for this category
     public var preference: PreferenceOptions
     
-    /// The preference for this category
-//    public var originalPreference: PreferenceOptions
-
     /// Whether this category is editable or not
     public let isEditable: Bool
 
@@ -77,7 +67,6 @@ public class Category: Codable {
         case category
         case description
         case preference
-//        case originalPreference = "original_preference"
         case isEditable = "is_editable"
         case channels
     }
@@ -161,29 +150,22 @@ public struct PreferenceAPIResponse: Response {
 }
 
 struct RequestPayload: Codable {
-    /// The preference to be applied
     let preference: PreferenceOptions
 
-    /// An array of channels to opt out (optional)
     let optOutChannels: [String]?
 
     enum CodingKeys: String, CodingKey {
-        /// The `preference` key in the JSON dictionary
         case preference
 
-        /// The `opt_out_channels` key in the JSON dictionary (optional)
         case optOutChannels = "opt_out_channels"
     }
 }
 
-
 struct ChannelRequestPayload: Codable {
-    /// An array of channel preferences (optional)
     public let channelPreferences: [ChannelPreference]
     
     enum CodingKeys: String, CodingKey {
         
-        /// The `channel_preferences` key in the JSON dictionary (optional)
         case channelPreferences = "channel_preferences"
     }
 }

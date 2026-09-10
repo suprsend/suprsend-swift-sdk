@@ -1,10 +1,3 @@
-//
-//  ValidatedDataOptions.swift
-//  SuprSend
-//
-//  Created by Ram Suthar on 16/09/24.
-//
-
 import Foundation
 
 struct ValidatedDataOptions {

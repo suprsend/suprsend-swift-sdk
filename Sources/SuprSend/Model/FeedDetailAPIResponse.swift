@@ -1,10 +1,3 @@
-//
-//  FeedDetailAPIResponse.swift
-//  SuprSend
-//
-//  Created by Ram Suthar on 31/08/25.
-//
-
 import Foundation
 
 public struct FeedDetailAPIResponse: Response {

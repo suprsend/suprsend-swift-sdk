@@ -1,8 +1,3 @@
-//
-//  PushTokenAction.swift
-//  SuprSend
-//
-
 import Foundation
 
 /// What ``SuprSendClient/changeTenant(tenantId:pushTokenAction:)`` does with

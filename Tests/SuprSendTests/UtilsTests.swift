@@ -1,10 +1,3 @@
-//
-//  UtilsTests.swift
-//  SuprSendTests
-//
-//  Created by Ram Suthar on 16/09/24.
-//
-
 import Foundation
 import Testing
 
@@ -64,15 +57,12 @@ struct UtilsTests {
     }
     
     @Test func testEpochMs() {
-        // Integer milliseconds, rounded — the unit the hub expects for `$time`.
         let date = Date(timeIntervalSince1970: 1_700_000_000.1234)
         #expect(Utils.shared.epochMs(date) == 1_700_000_000_123)
 
-        // Rounds (not truncates) — .9996s carries into the next whole second.
         let roundsUp = Date(timeIntervalSince1970: 1_700_000_000.9996)
         #expect(Utils.shared.epochMs(roundsUp) == 1_700_000_001_000)
 
-        // Default argument is "now": well past the seconds-vs-ms ambiguity range.
         #expect(Utils.shared.epochMs() > 1_600_000_000_000)
     }
 

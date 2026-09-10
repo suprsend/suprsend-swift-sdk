@@ -1,14 +1,6 @@
-//
-//  ChangeTenantTests.swift
-//  SuprSendTests
-//
-
 import Testing
 @testable import SuprSend
 
-/// `changeTenant` paths that need no network and no push registration: input
-/// validation, the default `.none` action, and `.copy` / `.move` before a user
-/// is identified (where the token step is skipped and the tenant still moves).
 struct ChangeTenantTests {
 
     @Test func emptyTenantIdIsRejectedAndLeavesTenantUnchanged() async {

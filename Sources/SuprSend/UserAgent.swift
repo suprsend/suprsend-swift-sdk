@@ -1,8 +1,3 @@
-//
-//  UserAgent.swift
-//  SuprSend
-//
-
 import Foundation
 #if os(iOS)
 import UIKit
@@ -130,8 +125,6 @@ enum UserAgentDetection {
         #endif
     }
 
-    /// Raw hardware identifier (e.g. `iPhone14,3`, `Mac15,7`). Server-side can
-    /// map to display names.
     static func detectDeviceModel() -> String {
         var sysinfo = utsname()
         guard uname(&sysinfo) == 0 else { return "" }
@@ -143,9 +136,6 @@ enum UserAgentDetection {
         }
     }
 
-    /// Swift language version the SDK was compiled against. Picks the highest
-    /// matching `swift(>=X.Y)` rung — equivalent to what `python --version`
-    /// reports for the web SDK's `lang_version`.
     static func detectLangVersion() -> String {
         #if swift(>=6.1)
         return "6.1"
@@ -168,19 +158,6 @@ enum UserAgentDetection {
 
 }
 
-/// Builds the effective ``ClientUserAgentConfig`` by layering caller-supplied
-/// values over detected defaults.
-///
-/// Precedence (matches web SDK `buildClientUserAgent`):
-/// 1. `override` fields (per-field) win when non-nil.
-/// 2. Otherwise, `appInfo` is used for the app block.
-/// 3. Otherwise, values are auto-detected (OS, version, device, lang version).
-///
-/// The `app_info` block is purely caller-supplied and gated on `name`: when
-/// the resolved `name` is missing or empty, the entire block is omitted from
-/// the payload — a stray `version` without a `name` is dropped. When both are
-/// present, `override.appInfo` is merged into `appInfo` field-by-field so a
-/// caller setting only `appInfo.version` doesn't blank out `appInfo.name`.
 func buildClientUserAgent(
     appInfo: AppInfo? = nil,
     override: ClientUserAgentConfig? = nil
@@ -190,11 +167,9 @@ func buildClientUserAgent(
     let detectedDevice = UserAgentDetection.detectDeviceModel()
     let detectedLangVersion = UserAgentDetection.detectLangVersion()
 
-    // `app_info` is gated on `name`: matches the web SDK's
-    // `if (appInfo?.name) { ... }` rule — a caller that supplies only a
-    // version (with no name) is treated the same as supplying nothing.
     let resolvedAppName = override?.appInfo?.name ?? appInfo?.name
     let resolvedAppVersion = override?.appInfo?.version ?? appInfo?.version
+    // app_info only when name is set (matches web SDK).
     let resolvedAppInfo: AppInfo? = (resolvedAppName?.isEmpty == false)
         ? AppInfo(name: resolvedAppName, version: resolvedAppVersion)
         : nil
@@ -213,12 +188,6 @@ func buildClientUserAgent(
     )
 }
 
-/// Compact one-line user-agent string for the `X-Suprsend-User-Agent` header.
-///
-/// Shape: `sdk/version (lang/langVersion; os) (appName/appVersion)`. The
-/// `lang/langVersion` segment drops the `/langVersion` suffix when no version
-/// is detected. Each parenthesised group is omitted when its contents are
-/// empty.
 func buildUserAgent(_ config: ClientUserAgentConfig) -> String {
     let sdk = config.sdk ?? ""
     let version = config.sdkVersion ?? ""
@@ -250,9 +219,6 @@ func buildUserAgent(_ config: ClientUserAgentConfig) -> String {
     return result
 }
 
-/// JSON-encodes a ``ClientUserAgentConfig`` for the
-/// `X-Suprsend-Client-User-Agent` header. Returns `"{}"` on encode failure so
-/// the header value is always a valid JSON object.
 func encodeClientUserAgent(_ config: ClientUserAgentConfig) -> String {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys]

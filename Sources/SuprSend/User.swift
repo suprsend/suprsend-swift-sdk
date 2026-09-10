@@ -1,10 +1,3 @@
-//
-//  User.swift
-//  SuprSend
-//
-//  Created by Ram Suthar on 25/08/24.
-//
-
 import Foundation
 
 public class User {
@@ -18,18 +11,11 @@ public class User {
         config.distinctID ?? .init()
     }
 
-    /// Initializes a new instance of `User` with the given configuration.
-    /// - Parameter config: The configuration to use for this user.
     init(config: SuprSendClient) {
         self.config = config
         self.preferences = Preferences(config: config)
     }
 
-    /// Triggers an event on the user's behalf, sending a request to the API.
-    /// This method is used internally by other methods in this class. It takes
-    /// an `EventProperties` object and sends it to the API using the provided configuration.
-    /// - Parameter eventProperties: The properties of the event to trigger.
-    /// - Returns: A promise that resolves with a response from the API, or rejects with an error if one occurs.
     private func triggerUserEvent(_ eventProperties: UserProperty.EventProperties) async
         -> APIResponse
     {
@@ -43,8 +29,6 @@ public class User {
         return await config.eventApi(payload: .init(event))
     }
 
-    /// Retrieves the device ID associated with this user.
-    /// If a device ID has been previously stored, it is returned. Otherwise, a new device ID is generated and stored for future use.
     private func getDeviceID() -> String {
         let deviceID = Utils.shared.getLocalStorageData(key: Constants.deviceIDKey)
 
@@ -57,30 +41,18 @@ public class User {
         }
     }
 
-    /// Creates an event with the given type and properties.
-    /// - Parameter type: The type of event to create.
-    /// - Parameter properties: The properties of the event.
-    /// - Returns: An array containing a single key-value pair, where the key is the event type and the value is the event properties.
     private func event(type: UserProperty.EventType, properties: EventProperty) -> [UserProperty
         .EventType: Property]
     {
         [type: Utils.shared.validateObjData(data: properties).convertToProperty()]
     }
 
-    /// Creates an event with the given type and array of string properties.
-    /// - Parameter type: The type of event to create.
-    /// - Parameter properties: An array of strings representing the event properties.
-    /// - Returns: An array containing a single key-value pair, where the key is the event type and the value is the event properties.
     private func event(type: UserProperty.EventType, properties: [String]) -> [UserProperty
         .EventType: Property]
     {
         [type: .init(Utils.shared.validateArrayData(data: properties))]
     }
 
-    /// Creates an event with the given type and channel properties.
-    /// - Parameter type: The type of event to create.
-    /// - Parameter properties: A dictionary representing the channel properties.
-    /// - Returns: An array containing a single key-value pair, where the key is the event type and the value is the event properties.
     private func event(type: UserProperty.EventType, properties: ChannelProperty) -> [UserProperty
         .EventType: Property]
     {
@@ -203,14 +175,8 @@ typealias ChannelProperty = [ChannelType: Encodable]
 
 extension ChannelProperty {
 
-    /// Converts this channel property to a `Property` object.
-    /// This method takes no parameters and returns a promise that resolves with a `Property` object representing the converted channel property.
-    /// - Returns: A promise that resolves with a `Property` object representing the converted channel property, or rejects with an error if one occurs.
     func convertToProperty() -> Property {
-        // Re-key by rawValue: String-keyed dictionaries always encode as JSON
-        // objects, whereas enum-keyed ones encode as an alternating key/value
-        // *array* on OSes without `CodingKeyRepresentable` support
-        // (pre-iOS 15.4 / macOS 12.3), silently corrupting the payload.
+        // Re-key by rawValue: enum-keyed Dictionary encodes as an array before iOS 15.4.
         var converted = [String: AnyEncodable]()
         for (key, value) in self {
             converted[key.rawValue] = AnyEncodable(value)

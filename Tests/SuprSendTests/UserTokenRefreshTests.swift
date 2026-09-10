@@ -1,8 +1,3 @@
-//
-//  UserTokenRefreshTests.swift
-//  SuprSendTests
-//
-
 import Testing
 import Foundation
 @testable import SuprSend
@@ -41,9 +36,6 @@ struct UserTokenRefreshTests {
                 group.addTask {
                     await inflight.run {
                         await runs.increment()
-                        // Keep the run open long enough for every sibling to
-                        // arrive and find it in flight, with generous margin
-                        // for a loaded machine running other suites in parallel.
                         try? await Task.sleep(nanoseconds: 500_000_000)
                     }
                 }
@@ -74,9 +66,6 @@ struct UserTokenRefreshTests {
                         try? await Task.sleep(nanoseconds: 100_000_000)
                         await completed.increment()
                     }
-                    // By the time `run` returns, the operation this caller
-                    // joined must have finished — never observe zero completions.
-                    // (Exactly-once sharing is covered by the test above.)
                     return await completed.value >= 1
                 }
             }
