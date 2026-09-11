@@ -2,7 +2,6 @@ import Foundation
 
 public class User {
 
-    /// The user's preferences.
     public let preferences: Preferences
 
     private let config: SuprSendClient

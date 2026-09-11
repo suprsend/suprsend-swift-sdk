@@ -27,7 +27,7 @@ public class Feed {
     private var cancellables = Set<AnyCancellable>()
 
     private var fetchGeneration = 0
-    
+
     public var data: IFeedData {
         let storeData = store.value
         
@@ -336,7 +336,7 @@ extension Feed {
                 if (notification.n_id == notificationId) {
                     if (notification.seen_on == nil) {
                         return notification
-                            .with(seen_on: Date.now.timeIntervalSince1970)
+                            .with(seen_on: TimeInterval(Utils.shared.epochMs()))
                     } else {
                         alreadyUpdated = true
                     }
@@ -374,7 +374,7 @@ extension Feed {
             notifications: storeData.notifications.map({ notification in
                 if (notification.n_id == notificationId) {
                     if (notification.read_on == nil) {
-                        let now = Date.now.timeIntervalSince1970
+                        let now = TimeInterval(Utils.shared.epochMs())
                         var updated = notification.with(read_on: now)
                         if (notification.seen_on == nil) {
                             updated = updated.with(seen_on: now)
@@ -458,13 +458,13 @@ extension Feed {
                 if (notification.n_id == notificationId) {
                     if (notification.interacted_on == nil) {
                         newNotification = newNotification
-                            .with(interacted_on: Date.now.timeIntervalSince1970)
+                            .with(interacted_on: TimeInterval(Utils.shared.epochMs()))
                     } else {
                         alreadyUpdated = true
                     }
                     if (notification.read_on == nil) {
                         newNotification = newNotification
-                            .with(read_on: Date.now.timeIntervalSince1970)
+                            .with(read_on: TimeInterval(Utils.shared.epochMs()))
                     }
                 }
                 return newNotification
@@ -537,7 +537,7 @@ extension Feed {
                 if (notificationIds.contains(notification.n_id)) {
                     if (notification.seen_on == nil) {
                         return notification
-                            .with(seen_on: Date.now.timeIntervalSince1970)
+                            .with(seen_on: TimeInterval(Utils.shared.epochMs()))
                     }
                 }
                 return notification
@@ -598,7 +598,7 @@ extension Feed {
                 .notifications.map({ notification in
                     if (notification.read_on == nil) {
                         return notification
-                            .with(read_on: Date.now.timeIntervalSince1970)
+                            .with(read_on: TimeInterval(Utils.shared.epochMs()))
                     }
                     return notification
                 })
@@ -1044,7 +1044,7 @@ extension Feed {
             let notifications = storeData.notifications.map { notification in
                 if (notification.read_on == nil) {
                     notification
-                        .with(read_on: Date.now.timeIntervalSince1970)
+                        .with(read_on: TimeInterval(Utils.shared.epochMs()))
                 } else {
                     notification
                 }
@@ -1071,7 +1071,7 @@ extension Feed {
                     .notifications.map({ notification in
                         if (ids.contains(notification.n_id)) {
                             notification
-                                .with(seen_on: Date.now.timeIntervalSince1970)
+                                .with(seen_on: TimeInterval(Utils.shared.epochMs()))
                         } else {
                             notification
                         }

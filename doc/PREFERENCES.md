@@ -208,6 +208,8 @@ struct Category: Codable {
  var preference: PreferenceOptions
  var isEditable: Bool
  var channels: [CategoryChannel]?
+ var digestSchedule: CategoryDigestSchedule?
+ var properties: CategoryProperties?
 
   enum CodingKeys: String, CodingKey {
     case name
@@ -216,6 +218,8 @@ struct Category: Codable {
     case preference
     case isEditable = "is_editable"
     case channels
+    case digestSchedule = "digest_schedule"
+    case properties
   }
 }
 ```
@@ -228,6 +232,8 @@ struct Category: Codable {
 | preference   | This key indicates if the category's preference switch is on or off. Get **OPT\_IN** when the switch is on and **OPT\_OUT** when the switch is off |
 | is\_editable | Indicates if the preference switch button is disabled or not. If its value is false then the preference setting for that category can't be edited  |
 | channels     | data of all category channels to be shown below the sub-category. Loop through it to show checkboxes under every subcategory item.                 |
+| digest\_schedule | Digest schedule for the category, if one is configured: `id`, `label`, `frequency`, `interval`, plus `time`, `dtstart`, `weekdays` and `monthdays` fields that each carry `edit_policy`, `default_value` and the user's `value`. Update it with `updateDigestScheduleInCategory`. |
+| properties   | Custom property configured on the category, if any: `key`, `label`, `value_type`, `edit_policy`, `default_value`, the user's `value`, and `choices` for choice types. Update it with `updatePropertiesInCategory`. |
 
 ### 1.3 Category channels (sections -> sub-categories -> channels)
 
@@ -284,10 +290,10 @@ struct ChannelPreference: Codable {
 
 ### Get preferences data
 
-Use this method to get preferences data and create the preferences UI by following the above sections. This method should be called first before any update preference methods.
+Use this method to get preferences data and create the preferences UI by following the above sections. This method should be called first before any update preference methods. Cached preferences data is cleared by `SuprSend.shared.reset()` on logout, so call this method again after the next `identify`.
 
 ```swift
-await SuprSend.shared.preferences.getPreferences(args: Preferences.Args(tenantId: "", tags: "", locale: "")) 
+await SuprSend.shared.user.preferences.getPreferences(args: Preferences.Args(tenantId: "", tags: "", locale: ""))
 ```
 
 | Argument (optional) | Description                                                                                                                                                                                                                                                                                                                                                                                                          |
@@ -306,7 +312,7 @@ await SuprSend.shared.preferences.getPreferences(args: Preferences.Args(tenantId
 Calling this method will opt-in/opt-out users from that category-level channel. When the category's channel checkbox is editable and the user clicks on the checkbox you can call this method.
 
 ```swift
-await SuprSend.shared.preferences.updateChannelPreferenceInCategory(
+await SuprSend.shared.user.preferences.updateChannelPreferenceInCategory(
   channel: "channel",
   preference: PreferenceOptions,
   category: "category"
@@ -327,7 +333,7 @@ enum PreferenceOptions: String, Codable {
 This is category level preference changing method. Calling this method will opt-in/opt-out user from that category. When the category is editable and the switch is toggled you can call this method.
 
 ```swift
-await SuprSend.shared.preferences.updateCategoryPreference(category: "category_value", preference: PreferenceOptions)
+await SuprSend.shared.user.preferences.updateCategoryPreference(category: "category_value", preference: PreferenceOptions)
 
 enum PreferenceOptions: String, Codable {
   case optIn = "opt_in"
@@ -342,7 +348,7 @@ enum PreferenceOptions: String, Codable {
 This method updated the channel-level preference of the user.
 
 ```swift
-await SuprSend.shared.preferences.updateOverallChannelPreference(
+await SuprSend.shared.user.preferences.updateOverallChannelPreference(
   channel: "channel",
   preference: ChannelLevelPreferenceOptions
 )
@@ -357,20 +363,58 @@ enum ChannelLevelPreferenceOptions: String, Codable {
 
 ![Update overall channel preference](https://mintcdn.com/suprsend/ysJyO3LOXwZ5L098/images/docs/mobile-overall-update-channels.png?fit=max&auto=format&n=ysJyO3LOXwZ5L098&q=85&s=43fae7ed01bbb0ddde7ca1ae7fe425f4)
 
+### Update digest schedule in category
+
+Changes how often the user receives a digest for a category. Pass the `id` from the category's `digestSchedule` and only the fields you want to change; a field can be changed when its `editPolicy` is `editable`. Unlike the preference toggles above, this call is not debounced: the request is sent immediately and the returned response is the API response. On success `.preferencesUpdated` fires with refreshed data, on failure `.preferencesError` fires.
+
+```swift
+await SuprSend.shared.user.preferences.updateDigestScheduleInCategory(
+  category: "category",
+  digestSchedule: UpdateCategoryDigestSchedulePayload(
+    id: "schedule_id",
+    time: "09:00",
+    weekdays: [.monday, .friday]
+  )
+)
+```
+
+**Returns:** `async -> PreferenceAPIResponse`
+
+### Update properties in category
+
+Sets the user's value for a custom property on a category. Take `key`, `valueType` and `choices` from the category's `properties`. Values are `.string`, `.number` or `.list` of strings. Like the digest schedule call, this is sent immediately, not debounced.
+
+```swift
+await SuprSend.shared.user.preferences.updatePropertiesInCategory(
+  category: "category",
+  properties: [
+    UpdateCategoryPropertyPayload(key: "region", value: .string("us"))
+  ]
+)
+```
+
+**Returns:** `async -> PreferenceAPIResponse`
+
 ### Event listeners
 
 All preferences update api's are optimistic updates. Actual API call will happen in background with 1 second debounce. Since its a background task SDK provides event listeners to get updated preference data based on API call status. Listen to this event listeners and update the UI accordingly.
 
+`on` returns a listener handle. Listeners are not removed automatically, so call `off` with the handle when the screen goes away, or `off(.preferencesError)` to drop every listener for an event. Events are not replayed to listeners registered later.
+
 ```swift
-SuprSend.shared.emitter.on(.preferencesUpdated) { data in
+let updated = SuprSend.shared.emitter.on(.preferencesUpdated) { data in
   // update local store so that UI is updated with latest data
 }
 
-SuprSend.shared.emitter.on(.preferencesError) { error in
+let failed = SuprSend.shared.emitter.on(.preferencesError) { error in
   // show error toast to user
 }
+
+// when the screen goes away
+SuprSend.shared.emitter.off(updated)
+SuprSend.shared.emitter.off(failed)
 ```
 
 ## Example
 
-Preferences UI example code: [PreferencesView.swift](https://github.com/suprsend/suprsend-swift-sdk/blob/main/Example/SuprSendSwiftExample-iOS/Views/Profile/Preferences/PreferencesView.swift) and [PreferenceModel.swift](https://github.com/suprsend/suprsend-swift-sdk/blob/main/Example/SuprSendSwiftExample-iOS/Model/PreferenceModel.swift)
+Preferences UI example code: [PreferenceScreen.swift](https://github.com/suprsend/suprsend-swift-sdk/blob/main/Example/SwiftExample/Screens/PreferenceScreen.swift)

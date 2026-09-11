@@ -78,7 +78,7 @@ public class Preferences {
 
     private let config: SuprSendClient
     private var preferenceData: PreferenceData?
-    private var preferenceArgs: Args?
+    private(set) var preferenceArgs: Args?
 
     struct UpdateCategoryParams {
         let category: String
@@ -117,7 +117,7 @@ public class Preferences {
         categoryPreferenceDebouncer.action = { [weak self] params in
             _ = await self?._updateCategoryPreferences(
                 category: params.category,
-                body: params.body,
+                body: .init(params.body),
                 subCategory: params.subCategory,
                 args: params.args
             )
@@ -126,6 +126,13 @@ public class Preferences {
         channelPreferenceDebouncer.action = { [weak self] params in
             _ = await self?._updateChannelPreferences(body: params.body, args: params.args)
         }
+    }
+
+    public func reset() {
+        categoryPreferenceDebouncer.cancelAll()
+        channelPreferenceDebouncer.cancelAll()
+        preferenceData = nil
+        preferenceArgs = nil
     }
 
     func getUrlpath(path: String? = nil, qp: [String: Any?]? = nil) -> URL {
@@ -190,7 +197,12 @@ public class Preferences {
             "tags": encodeTags(args?.tags),
             "locale": args?.locale,
         ]
-        preferenceArgs = args
+        preferenceArgs = Args(
+            tenantId: args?.tenantId ?? config.tenantId,
+            showOptOutChannels: args?.showOptOutChannels ?? true,
+            tags: args?.tags,
+            locale: args?.locale
+        )
 
         let path = getUrlpath(qp: queryParams)
 
@@ -259,7 +271,7 @@ public class Preferences {
 
     private func _updateCategoryPreferences(
         category: String,
-        body: RequestPayload,
+        body: AnyEncodable,
         subCategory: Category,
         args: Args? = nil
     ) async -> PreferenceAPIResponse {
@@ -275,18 +287,14 @@ public class Preferences {
         let response: PreferenceAPIResponse = await config.client().request(
             reqData: .init(
                 path: path.absoluteString,
-                payload: .init(body),
+                payload: body,
                 type: .patch
             )
         )
 
-        if response.error != nil {
-            config.emitter.emit(event: .preferencesError, data: response)
-        } else {
-            let response = await getPreferences(args: preferenceArgs)
-            config.emitter.emit(event: .preferencesUpdated, data: response)
-        }
+        guard !Task.isCancelled else { return response }
 
+        await emitUpdateResult(response)
         return response
     }
 
@@ -306,13 +314,21 @@ public class Preferences {
                 type: .patch
             )
         )
+
+        guard !Task.isCancelled else { return response }
+
+        await emitUpdateResult(response)
+        return response
+    }
+
+    private func emitUpdateResult(_ response: PreferenceAPIResponse) async {
         if response.error != nil {
             config.emitter.emit(event: .preferencesError, data: response)
-        } else {
-            let response = await getPreferences(args: preferenceArgs)
-            config.emitter.emit(event: .preferencesUpdated, data: response)
+            return
         }
-        return response
+        // Emit the local store like the web SDK; a failed refresh must not surface as an update.
+        _ = await getPreferences(args: preferenceArgs)
+        config.emitter.emit(event: .preferencesUpdated, data: .success(statusCode: 200, body: data))
     }
 
     /// Used to update user's category level preference.
@@ -517,6 +533,93 @@ public class Preferences {
         )
 
         return .success(body: data)
+    }
+
+    /// Used to update user's category level digest schedule. Sent immediately, not debounced.
+    /// - Parameters:
+    ///   - category: The ID of the category to update.
+    ///   - digestSchedule: The schedule fields to apply. `id` must match the category's ``Category/digestSchedule``.
+    ///   - args: Arguments for the request. Defaults to `nil`.
+    public func updateDigestScheduleInCategory(
+        category: String,
+        digestSchedule: UpdateCategoryDigestSchedulePayload,
+        args: Args? = nil
+    ) async -> PreferenceAPIResponse {
+        switch findCategory(category) {
+        case .failed(let response):
+            return response
+        case .found(let categoryData):
+            return await sendCategoryUpdate(
+                category: category,
+                categoryData: categoryData,
+                payload: DigestScheduleRequestPayload(
+                    digestSchedule: digestSchedule, preference: categoryData.preference),
+                args: args
+            )
+        }
+    }
+
+    /// Used to update user's category level properties. Sent immediately, not debounced.
+    /// - Parameters:
+    ///   - category: The ID of the category to update.
+    ///   - properties: Property values to apply. Keys come from the category's ``Category/properties``.
+    ///   - args: Arguments for the request. Defaults to `nil`.
+    public func updatePropertiesInCategory(
+        category: String,
+        properties: [UpdateCategoryPropertyPayload],
+        args: Args? = nil
+    ) async -> PreferenceAPIResponse {
+        switch findCategory(category) {
+        case .failed(let response):
+            return response
+        case .found(let categoryData):
+            return await sendCategoryUpdate(
+                category: category,
+                categoryData: categoryData,
+                payload: PropertiesRequestPayload(
+                    properties: properties, preference: categoryData.preference),
+                args: args
+            )
+        }
+    }
+
+    private enum CategoryLookup {
+        case found(Category)
+        case failed(PreferenceAPIResponse)
+    }
+
+    private func findCategory(_ category: String) -> CategoryLookup {
+        guard let data else {
+            return .failed(
+                .error(
+                    .init(
+                        type: .validation,
+                        message: "Call getPreferences method before performing action")))
+        }
+        guard let sections = data.sections else {
+            return .failed(.error(.init(type: .validation, message: "Sections doesn't exist")))
+        }
+        for section in sections {
+            if let match = section.subcategories?.first(where: { $0.category == category }) {
+                return .found(match)
+            }
+        }
+        return .failed(.error(.init(type: .validation, message: "Category not found")))
+    }
+
+    private func sendCategoryUpdate<Payload: Encodable>(
+        category: String,
+        categoryData: Category,
+        payload: Payload,
+        args: Args?
+    ) async -> PreferenceAPIResponse {
+        let showOptOutChannels = resolveShowOptOutChannels(args)
+        return await _updateCategoryPreferences(
+            category: category,
+            body: .init(payload),
+            subCategory: categoryData,
+            args: resolvedArgs(args, showOptOutChannels: showOptOutChannels)
+        )
     }
 
     /// Used to update overall channel preferences.

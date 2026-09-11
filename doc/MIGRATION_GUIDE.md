@@ -1,6 +1,6 @@
 # Migrating to v2 from v1
 
-The only change v2 introduces is tenant scoping across the sdk.
+v2 introduces tenant scoping across the sdk and moves preferences under `user`.
 
 ## Tenant scoping
 
@@ -20,7 +20,7 @@ await SuprSend.shared.identify(
 )
 
 // inherited — no need to repeat it in v2
-await SuprSend.shared.preferences.getPreferences()
+await SuprSend.shared.user.preferences.getPreferences()
 let feed = SuprSend.shared.feeds.initialize()
 ```
 
@@ -40,3 +40,17 @@ let feed = SuprSend.shared.feeds.initialize(
 ```
 
 **IMPORTANT**: Whichever tenant you pass in sdk, it must be included in `scope.tenant_id` of the [userToken](https://docs.suprsend.com/docs/client-authentication#enhanced-security-mode-with-signed-user-token), else the server throws scoping error.
+
+## Preferences accessor
+
+`SuprSend.shared.preferences` is removed. Use `SuprSend.shared.user.preferences`; the methods are unchanged.
+
+```swift
+// (v2)
+await SuprSend.shared.user.preferences.getPreferences()
+
+// (v1)
+await SuprSend.shared.preferences.getPreferences()
+```
+
+`reset()` now also clears cached preferences data and drops pending preference updates, so call `getPreferences` again after the next `identify`.

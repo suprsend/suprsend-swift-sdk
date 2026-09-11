@@ -69,10 +69,7 @@ public class SuprSendClient: NSObject {
 
     /// Push instance
     public private(set) lazy var push = Push(config: self)
-    
-    /// Preferences instance
-    public private(set) lazy var preferences = Preferences(config: self)
-    
+
     /// Feeds instance
     public private(set) lazy var feeds = FeedsFactory(config: self)
 
@@ -390,6 +387,8 @@ public class SuprSendClient: NSObject {
         self.tenantId = nil
 
         Utils.shared.removeLocalStorageData(key: Constants.authenticatedDistinctID)
+
+        user.preferences.reset()
 
         if !feeds.feedInstances.isEmpty {
             feeds.removeAll()
