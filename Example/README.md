@@ -26,32 +26,47 @@ for `XCLocalSwiftPackageReference`).
 
 ## Configure
 
-Edit `SwiftExample/SuprSendConstants.swift` and set your public key:
+Copy the template to `Secrets.plist` in the same folder and fill in your
+public key:
 
-```swift
-enum SuprSendConstants {
-    static let publicKey: String = "SS.PUBK.…"
-    static let host: String? = nil  // optional override for self-hosted collectors
-    static let tokenBaseURL: String = ""  // backend that mints JWT user tokens
-    static let feedAPIHost: String? = "https://inboxs.live"
-    static let feedSocketHost: String? = "https://betainbox.suprsend.com"
-}
+```sh
+cp SwiftExample/Secrets.example.plist SwiftExample/Secrets.plist
 ```
+
+```xml
+<key>publicKey</key>
+<string>SS.PUBK.…</string>
+<key>host</key>
+<string></string>              <!-- optional override for self-hosted collectors -->
+<key>tokenBaseURL</key>
+<string></string>              <!-- backend that mints JWT user tokens -->
+<key>feedAPIHost</key>
+<string></string>
+<key>feedSocketHost</key>
+<string></string>
+```
+
+`Secrets.plist` is gitignored, so your keys and staging hosts stay out of
+commits and the checked-in sources never need editing. Any value left empty
+falls back to the SDK's built-in default. `SwiftExample/SuprSendConstants.swift`
+just reads this plist at launch; if the file is missing, the app builds and runs
+with every value at its default.
 
 The inbox feed does **not** route through `host` — it has its own REST and
 socket endpoints, passed to the SDK as `FeedHost` on `IFeedOptions`. So
-overriding `host` alone still leaves the feed on the endpoints above; set
+overriding `host` alone still leaves the feed on its default endpoints; set
 `feedAPIHost` / `feedSocketHost` too when testing against a non-production
-stack. Either can be `nil` to fall back to the SDK's built-in default.
+stack.
 
-The same file also defines `StorageKeys` — the `UserDefaults` keys backing the
-example's login state. That's internal plumbing; you don't need to touch it.
+`SuprSendConstants.swift` also defines `StorageKeys` — the `UserDefaults` keys
+backing the example's login state. That's internal plumbing; you don't need to
+touch it.
 
-The Notification Service Extension carries its own copy of `publicKey` and
-`host` in `SwiftExampleNotificationService/NotificationService.swift` (as
-`NSEConstants`) — keep them in sync. (Extension targets cannot share Swift
-files with the main app when the app uses Xcode's file-system-synchronized
-groups.)
+The Notification Service Extension does not read the plist. If you want to test
+rich push, set `publicKey` and `host` directly in `NSEConstants` in
+`SwiftExampleNotificationService/NotificationService.swift`, and take care not
+to commit them. (Extension targets cannot share Swift files with the main app
+when the app uses Xcode's file-system-synchronized groups.)
 
 If you want to exercise the JWT-authenticated identify flow, point
 `SuprSendConstants.tokenBaseURL` at a backend that mints user tokens. While
@@ -87,7 +102,9 @@ SwiftExample/
 ├── AppDelegate.swift              # SuprSend.configure, push, deeplink
 ├── AppRouter.swift                # Screen enum + deeplink → screen
 ├── RootView.swift                 # Login vs Home/Preferences/Inbox switch
-├── SuprSendConstants.swift        # public key, host, storage key
+├── SuprSendConstants.swift        # reads Secrets.plist, storage keys
+├── Secrets.example.plist          # template — copy to Secrets.plist
+├── Secrets.plist                  # your keys & hosts (gitignored)
 ├── SuprSendTokenService.swift     # JWT mint + refresh callback
 ├── Toast.swift                    # ToastCenter + ToastOverlay
 ├── Screens/

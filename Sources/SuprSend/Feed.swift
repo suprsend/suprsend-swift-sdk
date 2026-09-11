@@ -58,7 +58,7 @@ public class Feed {
         self.store = .init(
             .init(
                 notifications: [],
-                store: options?.stores?.first ?? FeedConstants.store,
+                store: self.feedOptions.stores?.first ?? FeedConstants.store,
                 pageInfo: .init(
                     total: .zero,
                     hasMore: false,
@@ -271,7 +271,7 @@ extension Feed {
                     notifications: notifications,
                     store: storeData.store,
                     pageInfo: pageInfo,
-                    meta: storeData.meta,
+                    meta: store.value.meta, // live meta, so a parallel fetchCount result is kept
                     apiStatus: .success,
                     isFirstFetch: false
                 )
@@ -448,9 +448,9 @@ extension Feed {
             )
     }
     
+    // TODO: improve logic for already interacted cases
     public func markAsInteracted(notificationId: String) async -> APIResponse {
         let storeData = store.value
-        var alreadyUpdated = false
 
         store.send(storeData.with(
             notifications: storeData.notifications.map({ notification in
@@ -459,8 +459,6 @@ extension Feed {
                     if (notification.interacted_on == nil) {
                         newNotification = newNotification
                             .with(interacted_on: TimeInterval(Utils.shared.epochMs()))
-                    } else {
-                        alreadyUpdated = true
                     }
                     if (notification.read_on == nil) {
                         newNotification = newNotification
@@ -470,10 +468,6 @@ extension Feed {
                 return newNotification
             })
         ))
-
-        if (alreadyUpdated) {
-            return .success()
-        }
 
         let url = getUrl(path: "notifications/\(notificationId)/interacted", qp: [
             "tenant_id": feedOptions.tenantId,
@@ -508,9 +502,11 @@ extension Feed {
         ))
         
         if (alreadyUpdated) {
+            // The row is already removed locally, so the UI still needs the update.
+            emitter.send(.storeUpdate(self.data))
             return .success()
         }
-        
+
         let url = getUrl(path: "notifications/\(notificationId)/archive", qp: [
             "tenant_id": feedOptions.tenantId,
             "distinct_id": config.distinctID,
@@ -592,18 +588,19 @@ extension Feed {
         var meta = storeData.meta
         meta["badge"] = "0"
         
-        store.send(storeData.with(
-            notifications: storeData
+        // Chain both on one object so the badge reset is not dropped.
+        store.send(
+            storeData
                 .with(meta: meta)
-                .notifications.map({ notification in
+                .with(notifications: storeData.notifications.map({ notification in
                     if (notification.read_on == nil) {
                         return notification
                             .with(read_on: TimeInterval(Utils.shared.epochMs()))
                     }
                     return notification
-                })
-        ))
-        
+                }))
+        )
+
         let url = getUrl(path: "mark_all_read", qp: [
             "tenant_id": feedOptions.tenantId,
             "distinct_id": config.distinctID,
@@ -845,9 +842,9 @@ extension Feed {
         }
 
         socket = SocketClient(serverURL: host, headers: socketHeaders())
-        socket?.connect()
-
+        // Subscribe before connect; PassthroughSubject drops frames with no subscriber.
         initializeSocketEvents()
+        socket?.connect()
     }
 
     private func socketHeaders() -> [String: String] {

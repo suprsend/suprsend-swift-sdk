@@ -1,13 +1,23 @@
 import Foundation
 
 enum SuprSendConstants {
-    static let publicKey: String = ""
-    static let host: String? = nil
+    static let publicKey: String = secret("publicKey") ?? ""
+    static let host: String? = secret("host")
 
-    static let tokenBaseURL: String = ""
+    static let tokenBaseURL: String = secret("tokenBaseURL") ?? ""
 
-    static let feedAPIHost: String? = nil
-    static let feedSocketHost: String? = nil
+    static let feedAPIHost: String? = secret("feedAPIHost")
+    static let feedSocketHost: String? = secret("feedSocketHost")
+
+    // Secrets.plist is gitignored; copy Secrets.example.plist to create it.
+    private static let secrets: [String: Any] =
+        Bundle.main.url(forResource: "Secrets", withExtension: "plist")
+            .flatMap { NSDictionary(contentsOf: $0) as? [String: Any] } ?? [:]
+
+    private static func secret(_ key: String) -> String? {
+        guard let value = secrets[key] as? String, !value.isEmpty else { return nil }
+        return value
+    }
 }
 
 enum StorageKeys {
