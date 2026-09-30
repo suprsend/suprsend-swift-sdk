@@ -151,7 +151,7 @@ public class Preferences {
 
         var urlComponents = URLComponents(string: urlPath)!
         if let queryParams {
-            urlComponents.queryItems = queryParams
+            Utils.shared.setQueryItems(queryParams, on: &urlComponents)
         }
         return urlComponents.url!
     }

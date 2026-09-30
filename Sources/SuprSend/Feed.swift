@@ -8,6 +8,7 @@ private enum FeedConstants {
     static let store = IStore(storeId: "$suprsend_default_store", label: "")
     static let defaultApiHost = "https://inboxs.live"
     static let defaultSocketHost = "https://betainbox.suprsend.com"
+    static let socketAuthErrorMessage = "Authentication Error: wrong auth token"
 }
 
 /// A class responsible for handling inbox feed.
@@ -744,7 +745,7 @@ extension Feed {
         }
         
         if !queryParams.isEmpty {
-            urlComponents.queryItems = queryParams
+            Utils.shared.setQueryItems(queryParams, on: &urlComponents)
         }
         return urlComponents.url?.absoluteString ?? urlPath
     }
@@ -894,6 +895,29 @@ extension Feed {
                 Task { [weak self] in await self?.handleSocketConnectionLost() }
             }
             .store(in: &cancellables)
+
+        socket?.connectError
+            .sink { [weak self] message in
+                Task { [weak self] in await self?.handleSocketConnectError(message: message) }
+            }
+            .store(in: &cancellables)
+    }
+
+    private func handleSocketConnectError(message: String) async {
+        guard message == FeedConstants.socketAuthErrorMessage,
+              config.authenticateOptions?.refreshUserToken != nil,
+              config.userToken != nil else { return }
+
+        await config.client().refreshExpiringUserToken()
+
+        guard let socket,
+              let latestUserToken = config.userToken,
+              socket.headers["x-ss-signature"] != latestUserToken else { return }
+
+        socket.updateHeaders(socketHeaders())
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        guard self.socket === socket else { return }
+        socket.connect()
     }
 
     private func handleSocketConnectionLost() async {

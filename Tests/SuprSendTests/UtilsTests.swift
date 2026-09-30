@@ -66,6 +66,17 @@ struct UtilsTests {
         #expect(Utils.shared.epochMs() > 1_600_000_000_000)
     }
 
+    @Test func testSetQueryItemsEncodesPlus() throws {
+        var components = try #require(URLComponents(string: "https://example.com/v1/feed/notifications"))
+        Utils.shared.setQueryItems([
+            URLQueryItem(name: "distinct_id", value: "john+qa@acme.com"),
+            URLQueryItem(name: "tenant_id", value: "t 1")
+        ], on: &components)
+
+        #expect(components.percentEncodedQuery == "distinct_id=john%2Bqa@acme.com&tenant_id=t%201")
+        #expect(components.queryItems?.first?.value == "john+qa@acme.com")
+    }
+
     @Test func testLocalStorageData() {
         Utils.shared.setLocalStorageData(key: "test_key", value: "test_value")
         #expect(Utils.shared.getLocalStorageData(key: "test_key") == "test_value")

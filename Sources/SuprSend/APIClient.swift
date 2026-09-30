@@ -182,7 +182,7 @@ class APIClient {
 
             // Server doesn't echo HTTP status in the body; take it from the response.
             return R.init(
-                status: decoded.status,
+                status: (200..<300).contains(httpResponse?.statusCode ?? 0) ? .success : .error,
                 statusCode: httpResponse?.statusCode,
                 body: decoded.body,
                 error: decoded.error

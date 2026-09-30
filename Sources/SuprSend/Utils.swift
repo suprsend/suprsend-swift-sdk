@@ -21,6 +21,13 @@ final class Utils: Sendable {
         Int64((date.timeIntervalSince1970 * 1000).rounded())
     }
 
+    // URLComponents leaves `+` raw, which servers decode as a space; encode it like web's URLSearchParams.
+    func setQueryItems(_ items: [URLQueryItem], on components: inout URLComponents) {
+        components.queryItems = items
+        components.percentEncodedQuery = components.percentEncodedQuery?
+            .replacingOccurrences(of: "+", with: "%2B")
+    }
+
     func decode(jwtToken jwt: String) throws -> [String: Any] {
 
         enum DecodeErrors: Error {

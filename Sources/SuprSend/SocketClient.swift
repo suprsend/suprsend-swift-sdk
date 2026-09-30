@@ -52,11 +52,13 @@ class SocketClient: NSObject, ObservableObject {
         }
     }
     
-    private var webSocketTask: URLSessionWebSocketTask?
+    private(set) var webSocketTask: URLSessionWebSocketTask?
     private var urlSession: URLSession?
 
     private var heartbeatTask: Task<Void, Never>?
     private var reconnectionTask: Task<Void, Never>?
+
+    var isReconnecting: Bool { reconnectionTask != nil }
 
     // Engine.IO v4 is server-driven: server sends "2", client replies "3".
     private var serverPingInterval: TimeInterval = 25.0
@@ -70,14 +72,16 @@ class SocketClient: NSObject, ObservableObject {
     private var reconnectionAttempts = 0
     private let maxReconnectionAttempts = 25
     
-    private var userInitiatedDisconnect: Bool = false
-    
+    // Mirrors socket.io-client `socket.active`: false once the client or server ends the session.
+    private(set) var active = false
+
     private var serverURL: String
-    private var headers: [String: String]
+    private(set) var headers: [String: String]
     
     @Published var connectionStatus: ConnectionStatus = .disconnected
     let receivedMessage: PassthroughSubject<SocketMessage, Never> = .init()
     let connectionLost: PassthroughSubject<Void, Never> = .init()
+    let connectError: PassthroughSubject<String, Never> = .init()
     @Published var error: String?
     
     enum ConnectionStatus {
@@ -116,7 +120,7 @@ class SocketClient: NSObject, ObservableObject {
             return
         }
 
-        userInitiatedDisconnect = false
+        active = true
         connectionStatus = .connecting
 
         let request = URLRequest(url: url)
@@ -151,11 +155,14 @@ class SocketClient: NSObject, ObservableObject {
     }
 
     func disconnect() {
-        userInitiatedDisconnect = true
+        active = false
         logger.info("Disconnecting socket")
         stopKeepAlive()
         webSocketTask?.cancel(with: .goingAway, reason: nil)
         webSocketTask = nil
+        // URLSession retains its delegate until invalidated; without this the client is never freed.
+        urlSession?.invalidateAndCancel()
+        urlSession = nil
         connectionStatus = .disconnected
         reconnectionAttempts = 0
     }
@@ -185,7 +192,8 @@ class SocketClient: NSObject, ObservableObject {
     }
     
     func sendMessage(_ text: String) {
-        guard connectionStatus == .connected else {
+        // Not gated on .connected: the "40" connect frame and pongs go out before the server accepts.
+        guard webSocketTask != nil else {
             logger.error("Cannot send message - not connected")
             return
         }
@@ -239,16 +247,28 @@ class SocketClient: NSObject, ObservableObject {
                 self.connectionStatus = .error
                 self.error = "Receive failed: \(error.localizedDescription)"
                 logger.error("Receive failed: \(error.localizedDescription)")
-                if !self.userInitiatedDisconnect {
+                if self.active {
                     self.handleConnectionLost()
                 }
             }
         }
     }
     
-    private func handleTextMessage(_ text: String) {
+    func handleTextMessage(_ text: String) {
         logger.info("[SuprSendSocket] RX: \(text)")
-        if text.starts(with: "3"){
+        // Two-character Socket.IO packets must be matched before the Engine.IO "0"/"2"/"3" checks.
+        if text.starts(with: "40") {
+            logger.info("Socket.IO namespace connected")
+            connectionStatus = .connected
+            reconnectionAttempts = 0
+        } else if text.starts(with: "41") {
+            handleServerRejection(message: "io server disconnect")
+        } else if text.starts(with: "44") {
+            handleServerRejection(message: connectErrorMessage(from: String(text.dropFirst(2))))
+        } else if text.starts(with: "42") {
+            let message = text.suffix(from: text.index(text.startIndex, offsetBy: 2))
+            parseSocketMessage(jsonString: String(message))
+        } else if text.starts(with: "3") {
             lastPongReceived = Date()
         } else if text.starts(with: "0") {
             handleHandshake(jsonString: String(text.dropFirst()))
@@ -256,10 +276,28 @@ class SocketClient: NSObject, ObservableObject {
         } else if text.starts(with: "2") {
             lastPongReceived = Date()
             sendMessage("3")
-        } else if text.starts(with: "42") {
-            let message = text.suffix(from: text.index(text.startIndex, offsetBy: 2))
-            parseSocketMessage(jsonString: String(message))
         }
+    }
+
+    private func connectErrorMessage(from jsonString: String) -> String {
+        guard let data = jsonString.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let message = json["message"] as? String else {
+            return "connect_error"
+        }
+        return message
+    }
+
+    // Like socket.io-client `destroy()`: a server-ended session is not retried.
+    private func handleServerRejection(message: String) {
+        logger.error("Socket rejected by server: \(message)")
+        active = false
+        stopKeepAlive()
+        webSocketTask?.cancel(with: .goingAway, reason: nil)
+        webSocketTask = nil
+        connectionStatus = .error
+        error = message
+        connectError.send(message)
     }
 
     private func handleHandshake(jsonString: String) {
@@ -315,7 +353,7 @@ class SocketClient: NSObject, ObservableObject {
     }
 
     private func handleConnectionLost() {
-        if userInitiatedDisconnect { return }
+        guard active else { return }
         // Receive-failure and close paths race here; schedule once.
         if reconnectionTask != nil { return }
 
@@ -361,9 +399,8 @@ extension SocketClient: URLSessionWebSocketDelegate {
             return
         }
 
+        // Stays .connecting until the server accepts the namespace with "40".
         logger.info("WebSocket connected")
-        connectionStatus = .connected
-        reconnectionAttempts = 0
         lastPongReceived = Date()
 
         startKeepAlive()
@@ -386,7 +423,7 @@ extension SocketClient: URLSessionWebSocketDelegate {
         stopKeepAlive()
 
         // Receive-failure and close paths race here; schedule once.
-        if closeCode != .goingAway, reconnectionTask == nil {
+        if active, reconnectionTask == nil {
             connectionLost.send(())
             scheduleReconnection()
         }
