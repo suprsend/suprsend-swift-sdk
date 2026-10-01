@@ -890,6 +890,14 @@ extension Feed {
             }
             .store(in: &cancellables)
 
+        socket?.reconnected
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] recovered in
+                guard !recovered else { return }
+                Task { [weak self] in await self?.resyncAfterUnrecoveredReconnect() }
+            }
+            .store(in: &cancellables)
+
         socket?.connectionLost
             .sink { [weak self] in
                 Task { [weak self] in await self?.handleSocketConnectionLost() }
@@ -918,6 +926,15 @@ extension Feed {
         try? await Task.sleep(nanoseconds: 1_000_000_000)
         guard self.socket === socket else { return }
         socket.connect()
+    }
+
+    // The server didn't replay events missed while offline, so the loaded pages may be stale.
+    private func resyncAfterUnrecoveredReconnect() async {
+        guard socket != nil, !store.value.isFirstFetch else { return }
+
+        fetchGeneration &+= 1
+        resetState(to: store.value.store, preservesMeta: true)
+        _ = await fetch()
     }
 
     private func handleSocketConnectionLost() async {

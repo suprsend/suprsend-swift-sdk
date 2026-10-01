@@ -7,7 +7,8 @@ class SocketClient: NSObject, ObservableObject {
     struct SocketMessage: Decodable {
         let event: EventType
         let data: [String: AnyDecodable]?
-        
+        let offset: String?
+
         enum EventType: Equatable {
             case notificationUpdate
             case newNotification
@@ -45,6 +46,14 @@ class SocketClient: NSObject, ObservableObject {
                 } else {
                     self.data = nil
                 }
+
+                // With connection state recovery the server appends the packet offset as the last argument.
+                if parts.count >= 2,
+                   case .some(.string(let offset)) = parts.last {
+                    self.offset = offset
+                } else {
+                    self.offset = nil
+                }
             } else {
                 throw DecodingError
                     .dataCorruptedError(in: container, debugDescription: "No Event Type")
@@ -75,11 +84,18 @@ class SocketClient: NSObject, ObservableObject {
     // Mirrors socket.io-client `socket.active`: false once the client or server ends the session.
     private(set) var active = false
 
+    // Connection state recovery, like socket.io-client `_pid` / `_lastOffset`: sent back on reconnect so the server replays missed events.
+    private(set) var pid: String?
+    private(set) var lastOffset: String?
+    private var hasConnected = false
+
     private var serverURL: String
     private(set) var headers: [String: String]
-    
+
     @Published var connectionStatus: ConnectionStatus = .disconnected
     let receivedMessage: PassthroughSubject<SocketMessage, Never> = .init()
+    /// Emits on every namespace reconnect after the first; `true` when the server recovered the previous session.
+    let reconnected: PassthroughSubject<Bool, Never> = .init()
     let connectionLost: PassthroughSubject<Void, Never> = .init()
     let connectError: PassthroughSubject<String, Never> = .init()
     @Published var error: String?
@@ -165,6 +181,9 @@ class SocketClient: NSObject, ObservableObject {
         urlSession = nil
         connectionStatus = .disconnected
         reconnectionAttempts = 0
+        pid = nil
+        lastOffset = nil
+        hasConnected = false
     }
     
     private func startKeepAlive() {
@@ -258,9 +277,7 @@ class SocketClient: NSObject, ObservableObject {
         logger.info("[SuprSendSocket] RX: \(text)")
         // Two-character Socket.IO packets must be matched before the Engine.IO "0"/"2"/"3" checks.
         if text.starts(with: "40") {
-            logger.info("Socket.IO namespace connected")
-            connectionStatus = .connected
-            reconnectionAttempts = 0
+            handleNamespaceConnect(jsonString: String(text.dropFirst(2)))
         } else if text.starts(with: "41") {
             handleServerRejection(message: "io server disconnect")
         } else if text.starts(with: "44") {
@@ -314,29 +331,63 @@ class SocketClient: NSObject, ObservableObject {
         logger.info("Engine.IO handshake: pingInterval=\(serverPingInterval)s pingTimeout=\(serverPingTimeout)s")
     }
     
+    private func handleNamespaceConnect(jsonString: String) {
+        let json = jsonString.data(using: .utf8)
+            .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+        let newPid = json?["pid"] as? String
+        let recovered = newPid != nil && newPid == pid
+
+        pid = newPid
+        if !recovered {
+            lastOffset = nil
+        }
+
+        logger.info("Socket.IO namespace connected (recovered: \(recovered))")
+        connectionStatus = .connected
+        reconnectionAttempts = 0
+
+        if hasConnected {
+            reconnected.send(recovered)
+        }
+        hasConnected = true
+    }
+
     private func parseSocketMessage(jsonString: String) {
         guard let data = jsonString.data(using: .utf8) else {
             return
         }
-        
+
         do {
             let message = try JSONDecoder()
                 .decode(SocketMessage.self, from: data)
-            
+
+            if pid != nil, let offset = message.offset {
+                lastOffset = offset
+            }
+
             self.receivedMessage.send(message)
         } catch {
             logger.warning("Socket message decoding error: \(error)")
         }
     }
-    
-    private func sendAuthMessage() {
+
+    func connectPayload() -> String {
+        var auth = headers
+        if let pid {
+            auth["pid"] = pid
+            auth["offset"] = lastOffset
+        }
         do {
-            let auth = try JSONEncoder().encode(headers)
-            let message = String(data: auth, encoding: .utf8) ?? ""
-            sendMessage("40" + message)
+            let data = try JSONEncoder().encode(auth)
+            return "40" + (String(data: data, encoding: .utf8) ?? "")
         } catch {
             logger.warning("Auth message encoding error: \(error)")
+            return "40"
         }
+    }
+
+    private func sendAuthMessage() {
+        sendMessage(connectPayload())
     }
     
     private func handleDataMessage(_ data: Data) {

@@ -100,4 +100,71 @@ struct SocketClientTests {
         #expect(client.connectionStatus == .connected)
         client.disconnect()
     }
+
+    @Test func firstConnectSendsNoRecoveryFields() {
+        let client = makeClient()
+        var events: [Bool] = []
+        let sub = client.reconnected.sink { events.append($0) }
+
+        #expect(!client.connectPayload().contains("pid"))
+        client.handleTextMessage(#"40{"sid":"a","pid":"p1"}"#)
+
+        #expect(client.pid == "p1")
+        #expect(events.isEmpty)
+        sub.cancel()
+    }
+
+    @Test func reconnectSendsPidAndLastOffset() throws {
+        let client = makeClient()
+        client.handleTextMessage(#"40{"sid":"a","pid":"p1"}"#)
+        client.handleTextMessage(#"42["new_notification",{"n_id":"1"},"o1"]"#)
+        client.handleTextMessage(#"42["reset_badge","o2"]"#)
+
+        #expect(client.lastOffset == "o2")
+        let payload = String(client.connectPayload().dropFirst(2))
+        let auth = try #require(try JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: String])
+        #expect(auth["pid"] == "p1")
+        #expect(auth["offset"] == "o2")
+    }
+
+    @Test func samePidIsRecovered() {
+        let client = makeClient()
+        var events: [Bool] = []
+        let sub = client.reconnected.sink { events.append($0) }
+
+        client.handleTextMessage(#"40{"sid":"a","pid":"p1"}"#)
+        client.handleTextMessage(#"42["new_notification",{},"o1"]"#)
+        client.handleTextMessage(#"40{"sid":"b","pid":"p1"}"#)
+
+        #expect(events == [true])
+        #expect(client.lastOffset == "o1")
+        sub.cancel()
+    }
+
+    @Test func newPidIsNotRecovered() {
+        let client = makeClient()
+        var events: [Bool] = []
+        let sub = client.reconnected.sink { events.append($0) }
+
+        client.handleTextMessage(#"40{"sid":"a","pid":"p1"}"#)
+        client.handleTextMessage(#"42["new_notification",{},"o1"]"#)
+        client.handleTextMessage(#"40{"sid":"b","pid":"p2"}"#)
+
+        #expect(events == [false])
+        #expect(client.pid == "p2")
+        #expect(client.lastOffset == nil)
+        sub.cancel()
+    }
+
+    @Test func disconnectClearsRecoveryState() {
+        let client = makeClient()
+        client.connect()
+        client.handleTextMessage(#"40{"sid":"a","pid":"p1"}"#)
+        client.handleTextMessage(#"42["new_notification",{},"o1"]"#)
+
+        client.disconnect()
+
+        #expect(client.pid == nil)
+        #expect(client.lastOffset == nil)
+    }
 }
