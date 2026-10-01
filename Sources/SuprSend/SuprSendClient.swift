@@ -1,10 +1,3 @@
-//
-//  SuprSend.swift
-//  SuprSend
-//
-//  Created by Ram Suthar on 24/08/24.
-//
-
 import Foundation
 
 @objc public protocol SuprSendDeepLinkDelegate: AnyObject {
@@ -57,7 +50,7 @@ public class SuprSendClient: NSObject {
     ///
     /// This is *session* state, not build config: set it at login via
     /// ``identify(distinctID:userToken:tenantId:options:)`` and switch it at
-    /// runtime via ``changeTenant(tenantId:)``. A per-call `tenantId` (on
+    /// runtime via ``changeTenant(tenantId:pushTokenAction:)``. A per-call `tenantId` (on
     /// ``track(event:properties:tenantId:)``, ``Preferences/Args`` or
     /// ``IFeedOptions``) always overrides this value.
     public private(set) var tenantId: String?
@@ -67,14 +60,8 @@ public class SuprSendClient: NSObject {
     private var apiClient: APIClient?
     private(set) var authenticateOptions: AuthenticateOptions?
 
-    /// Fully-resolved user-agent payload sent on every request as JSON in the
-    /// `X-Suprsend-Client-User-Agent` header.
     private(set) var clientUserAgent: ClientUserAgentConfig
-    /// Compact string form sent on every request in the `X-Suprsend-User-Agent`
-    /// header.
     private(set) var userAgent: String
-    /// Pre-encoded JSON form of ``clientUserAgent`` so `APIClient` doesn't
-    /// re-encode on every request.
     private(set) var clientUserAgentJSON: String
 
     /// User instance
@@ -82,16 +69,12 @@ public class SuprSendClient: NSObject {
 
     /// Push instance
     public private(set) lazy var push = Push(config: self)
-    
-    /// Preferences instance
-    public private(set) lazy var preferences = Preferences(config: self)
-    
+
     /// Feeds instance
     public private(set) lazy var feeds = FeedsFactory(config: self)
 
     public let emitter = Emitter()
-    private var userTokenExpirationTimer: Timer?
-    
+
     private(set) var urlDelegate: SuprSendDeepLinkDelegate?
 
     /// Create SuprSend instance
@@ -128,9 +111,7 @@ public class SuprSendClient: NSObject {
         self.userAgent = buildUserAgent(resolvedUA)
         self.clientUserAgentJSON = encodeClientUserAgent(resolvedUA)
 
-        // Now that the public key is set, retry any events queued before it was
-        // available — e.g. a notification tap handled on a cold (killed-state)
-        // launch, where this configure() runs after the native push callback.
+        // Retry events queued before the public key existed (cold-start notification tap).
         self.push.flushPendingEvents()
     }
     
@@ -138,8 +119,6 @@ public class SuprSendClient: NSObject {
         self.urlDelegate = urlDelegate
     }
     
-    /// Get the APIClient instance for this SuprSend instance.
-    /// - Returns: The APIClient instance, or nil if not yet initialized.
     func client() -> APIClient {
         if distinctID == nil {
             logger.warning("[SuprSend]: distinctId is missing. User should be authenticated")
@@ -168,10 +147,6 @@ public class SuprSendClient: NSObject {
         return apiClient
     }
 
-    /// Send an event API request with the given payload.
-    /// - Parameters:
-    ///   - payload: The event data to send.
-    /// - Returns: The response from the API call.
     func eventApi(payload: AnyEncodable) async -> APIResponse {
         let response: APIResponse = await client().request(reqData: .init(path: "v2/event", payload: payload, type: .post))
         switch response.status {
@@ -191,7 +166,7 @@ public class SuprSendClient: NSObject {
     ///   - tenantId: Tenant the user is logging into. Stored as the global
     ///     ``tenantId`` and applied to subsequent preferences/feed calls. When
     ///     the user's token scopes multiple tenants, switch between them at
-    ///     runtime with ``changeTenant(tenantId:)`` — no re-identify needed.
+    ///     runtime with ``changeTenant(tenantId:pushTokenAction:)`` — no re-identify needed.
     ///   - options: Authenticate Options
     /// - Returns: Respnose from the API call
     public func identify(
@@ -201,7 +176,6 @@ public class SuprSendClient: NSObject {
         options: AuthenticateOptions? = nil
     ) async -> APIResponse {
 
-        // other user already present
         guard (self.distinctID == nil || distinctID == self.distinctID) else {
             return .error(
                 .init(
@@ -211,29 +185,23 @@ public class SuprSendClient: NSObject {
             )
         }
 
-        // Set the tenant for this session before any request goes out. Placed
-        // after the "other user" guard so a rejected identify doesn't mutate
-        // the current user's tenant. `nil` (e.g. token-refresh re-identify)
-        // leaves the existing tenant untouched.
         if let tenantId {
             self.tenantId = tenantId
         }
 
-        // updating usertoken for existing user
         if self.apiClient != nil,
             self.distinctID == distinctID,
             self.userToken != userToken
         {
+            // Keep the same APIClient: it reads the token live and owns the in-flight refresh coalescer.
             self.userToken = userToken
-            self.apiClient = APIClient(config: self)
-            if let refreshUserToken = options?.refreshUserToken {
-                self.handleRefreshUserToken(refreshUserToken: refreshUserToken)
+            if let options {
+                self.authenticateOptions = options
             }
 
             return .success()
         }
 
-        // ignore more than one identify call
         if self.distinctID != nil, self.apiClient != nil {
             return .success()
         }
@@ -246,23 +214,17 @@ public class SuprSendClient: NSObject {
         let authenticatedDistinctID = Utils.shared.getLocalStorageData(
             key: Constants.authenticatedDistinctID)
 
-        if let refreshUserToken = options?.refreshUserToken {
-            self.handleRefreshUserToken(refreshUserToken: refreshUserToken)
-        }
-
-        // already loggedin
         if authenticatedDistinctID == self.distinctID {
             await push.updatePushSubscription()
             return .success()
         }
 
-        // first time login
         let resp = await self.eventApi(
             payload: .init(
                 Event(
                     event: "$identify",
                     insertID: UUID().uuidString,
-                    time: Date.now.timeIntervalSince1970,
+                    time: Utils.shared.epochMs(),
                     distinctID: distinctID,
                     properties: .init(["$identified_id": distinctID]),
                     tenantId: self.tenantId
@@ -295,18 +257,64 @@ public class SuprSendClient: NSObject {
     /// Intended for users whose token scopes multiple tenants (a `tenant_id`
     /// array): identify once, then call this to move between them without
     /// resetting the session. Updates the global ``tenantId`` used by
-    /// subsequent preferences requests and newly-initialised feeds.
+    /// subsequent events, preferences requests and newly-initialised feeds.
     ///
     /// - Note: Already-running feed instances keep the tenant they were
     ///   initialised with — re-initialise a feed (via ``feeds``) to have it
     ///   reflect the new tenant. Re-fetch preferences (``Preferences/getPreferences(args:)``)
     ///   to load the new tenant's data.
-    /// - Parameter tenantId: The tenant to switch to.
-    @objc public func changeTenant(tenantId: String) {
-        if !isIdentified(checkUserToken: false) {
+    /// - Parameters:
+    ///   - tenantId: The tenant to switch to.
+    ///   - pushTokenAction: What to do with the device's push token. `.none`
+    ///     (default) leaves it attached to the current tenant; `.copy` attaches
+    ///     it to the new tenant as well; `.move` detaches it from the current
+    ///     tenant and attaches it to the new one. A device with no push token
+    ///     switches tenant successfully regardless.
+    /// - Returns: `.success()` once the tenant is switched. With `.copy` or
+    ///   `.move`, a failure to attach the token to the new tenant restores the
+    ///   previous tenant (re-attaching the token to it for `.move`) and returns
+    ///   that error, so the session never ends up on a tenant without the
+    ///   token the caller asked for.
+    @objc public func changeTenant(
+        tenantId: String,
+        pushTokenAction: PushTokenAction = .none
+    ) async -> APIResponse {
+        guard !tenantId.isEmpty else {
+            return .error(.init(type: .validation, message: "tenantId is missing or invalid"))
+        }
+
+        let identified = isIdentified(checkUserToken: false)
+        if !identified {
             logger.warning("[SuprSend]: changeTenant called before identify. Tenant will apply once a user is identified.")
         }
+
+        let oldTenantId = self.tenantId
+        let attachPush = pushTokenAction != .none
+            && identified
+            && oldTenantId != tenantId
+            && push.pushSubscribed()
+
+        if attachPush, pushTokenAction == .move {
+            let removeResp = await push.removePushSubscription()
+            if removeResp.status == .error {
+                return removeResp
+            }
+        }
+
         self.tenantId = tenantId
+
+        if attachPush {
+            let updateResp = await push.updatePushSubscription()
+            if updateResp.status == .error {
+                self.tenantId = oldTenantId
+                if pushTokenAction == .move {
+                    await push.updatePushSubscription()
+                }
+                return updateResp
+            }
+        }
+
+        return .success()
     }
 
     /// Track event with given properties
@@ -315,7 +323,7 @@ public class SuprSendClient: NSObject {
     ///   - properties: Properties for the event
     ///   - tenantId: Tenant to attribute this single event to. When `nil` the
     ///     global ``tenantId`` is used. Scoping one event this way does not
-    ///     change the session tenant — use ``changeTenant(tenantId:)`` for that.
+    ///     change the session tenant — use ``changeTenant(tenantId:pushTokenAction:)`` for that.
     /// - Returns: Response from the API call
     public func track(
         event: String,
@@ -332,7 +340,7 @@ public class SuprSendClient: NSObject {
         let event = Event(
             event: event,
             insertID: UUID().uuidString,
-            time: Date().timeIntervalSince1970,
+            time: Utils.shared.epochMs(),
             distinctID: distinctID ?? String(),
             properties: validatedProperties.convertToProperty(),
             tenantId: tenantId ?? self.tenantId
@@ -349,14 +357,11 @@ public class SuprSendClient: NSObject {
             validatedProperties = .init()
         }
 
-        // Public notification events ($notification_clicked/_delivered/_dismiss)
-        // omit tenant_id — the tenant is resolved server-side from the
-        // notification id, and this path can run unidentified (Notification
-        // Service Extension / cold start) where no reliable tenant exists.
+        // Public notification events omit tenant_id; the server resolves it from the notification id.
         let event = Event(
             event: event,
             insertID: UUID().uuidString,
-            time: Date().timeIntervalSince1970,
+            time: Utils.shared.epochMs(),
             distinctID: distinctID ?? String(),
             properties: validatedProperties.convertToProperty(),
             tenantId: nil,
@@ -364,76 +369,6 @@ public class SuprSendClient: NSObject {
         )
         let response: APIResponse = await publicClient().publicRequest(reqData: .init(path: "v2/event", payload: .init(event), type: .post))
         return response
-    }
-
-    /// Handle refresh user token callback
-    /// - Parameters:
-    ///   - refreshUserToken: Callback to refresh user token
-    func handleRefreshUserToken(refreshUserToken: @escaping RefreshTokenCallback) {
-        guard let userToken else { return }
-
-        let jwtPayload = try? Utils.shared.decode(jwtToken: userToken)
-        let expiresOn = (jwtPayload?[Constants.expiryKeyJWT] as? Double ?? .zero)// in ms
-        let now = Date.now.timeIntervalSince1970
-        let refreshBefore = 30.0  // call refresh api before 30sec of expiry
-
-        if expiresOn > now {
-            let timeDiff = expiresOn - now - refreshBefore
-
-            if userTokenExpirationTimer != nil {
-                userTokenExpirationTimer?.invalidate()
-                userTokenExpirationTimer = nil
-            }
-            
-            userTokenExpirationTimer = Timer.scheduledTimer(
-                withTimeInterval: timeDiff, repeats: false
-            ) { _ in
-                self.timerCallback(refreshUserToken: refreshUserToken)
-            }
-        }
-    }
-
-    /// Timer callback for refresh user token
-    /// - Parameters:
-    ///   - refreshUserToken: Callback to refresh user token
-    private func timerCallback(refreshUserToken: @escaping RefreshTokenCallback) {
-        guard let userToken else { return }
-
-        Task {
-            let newToken: String?
-            let jwtPayload: [String: Any]
-
-            do {
-                jwtPayload = try Utils.shared.decode(jwtToken: userToken)
-            } catch {
-                logger.warning("[SuprSend]: Couldn't decode JWT token")
-                return
-            }
-
-            do {
-                newToken = try await refreshUserToken(
-                    userToken,
-                    jwtPayload
-                )
-            } catch {
-                // retry fetching token
-                do {
-                    newToken = try await refreshUserToken(
-                        userToken,
-                        jwtPayload
-                    )
-                } catch {
-                    newToken = nil
-                    logger.warning("[SuprSend]: Couldn't fetch new userToken")
-                }
-            }
-
-            if let newToken {
-                _ = await self.identify(
-                    distinctID: self.distinctID ?? String(), userToken: newToken,
-                    options: self.authenticateOptions)
-            }
-        }
     }
 
     /// Reset the SuprSend instance.
@@ -453,11 +388,8 @@ public class SuprSendClient: NSObject {
 
         Utils.shared.removeLocalStorageData(key: Constants.authenticatedDistinctID)
 
-        if userTokenExpirationTimer != nil {
-            userTokenExpirationTimer?.invalidate()
-            userTokenExpirationTimer = nil
-        }
-        
+        user.preferences.reset()
+
         if !feeds.feedInstances.isEmpty {
             feeds.removeAll()
         }

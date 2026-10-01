@@ -1,10 +1,3 @@
-//
-//  Push.swift
-//  SuprSend
-//
-//  Created by Ram Suthar on 30/08/24.
-//
-
 import Foundation
 import UserNotifications
 #if os(iOS) || os(watchOS) || os(tvOS)
@@ -17,29 +10,21 @@ import UIKit.UIApplication
 
 /// A class responsible for handling push notifications.
 public class Push {
-    /// The configuration instance used to manage user data.
     private let config: SuprSendClient
     
     private let queue: PushQueue
     
     var delegate: SuprSendPushNotificationDelegate?
 
-    /// Initializes a new `Push` instance with the given configuration.
-    /// - Parameter config: The configuration instance to use.
     init(config: SuprSendClient) {
         self.config = config
         self.queue = PushQueue(config: config)
     }
 
-    /// Retries any persisted/pending push events. Invoked from `configure()` so
-    /// events queued before the public key was set (e.g. a notification tap from
-    /// a killed state) are sent once the key becomes available.
     func flushPendingEvents() {
         queue.flushPendingEvents()
     }
 
-    /// Retrieves the push subscription, if available.
-    /// - Returns: The push subscription as a string, or `nil` if not available.
     func getPushSubscription() async -> String? {
         if let token = config.deviceToken {
             return token
@@ -53,22 +38,34 @@ public class Push {
         return nil
     }
 
-    /// Updates the push subscription by adding it to the user's configuration.
-    /// - Note: This method will only update the subscription if one is available.
-    public func updatePushSubscription() async {
-        let subscription = await getPushSubscription()
-        if let subscription {
-            _ = await self.config.user.addiOSPush(subscription)
-        }
+    /// Whether the device currently has a push token the SDK can attach to a
+    /// tenant. Mirrors `pushSubscribed()` in suprsend-web-sdk.
+    public func pushSubscribed() -> Bool {
+        config.deviceToken != nil
     }
 
-    /// Removes the push subscription from the user's configuration.
-    /// - Note: This method will only remove the subscription if one is available.
-    public func removePushSubscription() async {
-        let subscription = await getPushSubscription()
-        if let subscription {
-            _ = await self.config.user.removeiOSPush(subscription)
+    /// Attaches the device's push token to the identified user on the active
+    /// tenant.
+    /// - Returns: The API response, or a `.notFound` error when the device has
+    ///   no push token yet (in which case nothing is sent).
+    @discardableResult
+    public func updatePushSubscription() async -> APIResponse {
+        guard let subscription = await getPushSubscription() else {
+            return .error(.init(type: .notFound, message: "Push subscription not found"))
         }
+        return await config.user.addiOSPush(subscription)
+    }
+
+    /// Detaches the device's push token from the identified user on the active
+    /// tenant.
+    /// - Returns: The API response, or a `.notFound` error when the device has
+    ///   no push token (in which case nothing is sent).
+    @discardableResult
+    public func removePushSubscription() async -> APIResponse {
+        guard let subscription = await getPushSubscription() else {
+            return .error(.init(type: .notFound, message: "Push subscription not found"))
+        }
+        return await config.user.removeiOSPush(subscription)
     }
 
     /// Retrieves the current notification permission status.
@@ -179,7 +176,6 @@ extension Push {
         Task {
             await trackNotificationDelivered(userInfo: notification.request.content.userInfo)
             
-            // Notification is presented while app is in active use and seen by user.
             await trackNotificationClicked(userInfo: notification.request.content.userInfo)
         }
     }

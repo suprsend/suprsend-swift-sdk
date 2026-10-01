@@ -1,10 +1,3 @@
-//
-//  UserPropertyTests.swift
-//  SuprSendTests
-//
-//  Created by Ram Suthar on 16/09/24.
-//
-
 import Foundation
 import Testing
 @testable import SuprSend
@@ -18,7 +11,7 @@ struct UserPropertyTests {
     func testAddOperation(properties: [UserProperty.EventType: Property]) async throws {
         let event = UserProperty(
             insertID: UUID().uuidString,
-            time: Date.now.timeIntervalSince1970,
+            time: Utils.shared.epochMs(),
             distinctID: UUID().uuidString,
             eventProperties: properties,
             tenantId: nil
@@ -28,9 +21,10 @@ struct UserPropertyTests {
 
         #expect(json.keys.contains("$insert_id"))
         #expect(json.keys.contains("distinct_id"))
-        #expect(json.keys.contains("$time"))
 
-        // A nil tenant must serialise as JSON null, not be omitted.
+        let time = try #require(json["$time"] as? Int64)
+        #expect(time > 1_600_000_000_000)
+
         #expect(json["tenant_id"] is NSNull)
 
         #expect(json.keys.contains("$add"))
@@ -45,7 +39,7 @@ struct UserPropertyTests {
     func testEmailProperty(property: ChannelProperty) async throws {
         let event = UserProperty(
             insertID: UUID().uuidString,
-            time: Date.now.timeIntervalSince1970,
+            time: Utils.shared.epochMs(),
             distinctID: UUID().uuidString,
             eventProperties: [.append: property.convertToProperty()],
             tenantId: "tenant-1"
@@ -59,15 +53,11 @@ struct UserPropertyTests {
         #expect((json["$append"] as? [String: Any])?["$email"] as? String == "hello@example.com")
     }
 
-    /// Regression test for the EXC_BREAKPOINT reported in PR #7: encoding a
-    /// `UserProperty` must produce one JSON *object* member per operation, and
-    /// must not delegate to Dictionary's enum-keyed Encodable conformance
-    /// (which traps or emits arrays on OSes without `CodingKeyRepresentable`).
     @Test("User Property - Multiple Operations Encode As Top-Level Objects")
     func testMultipleOperations() async throws {
         let event = UserProperty(
             insertID: UUID().uuidString,
-            time: Date.now.timeIntervalSince1970,
+            time: Utils.shared.epochMs(),
             distinctID: UUID().uuidString,
             eventProperties: [
                 .set: Property(["plan": "pro"]),
@@ -86,8 +76,6 @@ struct UserPropertyTests {
         #expect(json["$unset"] as? [String] == ["legacy_flag"])
     }
 
-    /// Channel properties must encode as a JSON object keyed by the channel's
-    /// raw value on every supported OS — never as an alternating key/value array.
     @Test("Channel Property - Encodes As JSON Object")
     func testChannelPropertyEncodesAsObject() async throws {
         let channels: ChannelProperty = [

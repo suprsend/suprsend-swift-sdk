@@ -17,7 +17,6 @@ This is how a typical preference page will look like:
 Preference Page contains 2 sections:
 
 1. Category-level preference settings (Sections)
-
    - [Sections](#11-sections)
 
    - [Categories](#12-categories-sections---sub-categories)
@@ -208,6 +207,8 @@ struct Category: Codable {
  var preference: PreferenceOptions
  var isEditable: Bool
  var channels: [CategoryChannel]?
+ var digestSchedule: CategoryDigestSchedule?
+ var properties: CategoryProperties?
 
   enum CodingKeys: String, CodingKey {
     case name
@@ -216,18 +217,22 @@ struct Category: Codable {
     case preference
     case isEditable = "is_editable"
     case channels
+    case digestSchedule = "digest_schedule"
+    case properties
   }
 }
 ```
 
-| Property     | Description                                                                                                                                        |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| category     | This key is the id of the category which is used while updating the preference.                                                                    |
-| name         | name of the category to be shown on the UI                                                                                                         |
-| description  | description of the category to be shown on the UI                                                                                                  |
-| preference   | This key indicates if the category's preference switch is on or off. Get **OPT\_IN** when the switch is on and **OPT\_OUT** when the switch is off |
-| is\_editable | Indicates if the preference switch button is disabled or not. If its value is false then the preference setting for that category can't be edited  |
-| channels     | data of all category channels to be shown below the sub-category. Loop through it to show checkboxes under every subcategory item.                 |
+| Property        | Description                                                                                                                                                                                                                                                                       |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| category        | This key is the id of the category which is used while updating the preference.                                                                                                                                                                                                   |
+| name            | name of the category to be shown on the UI                                                                                                                                                                                                                                        |
+| description     | description of the category to be shown on the UI                                                                                                                                                                                                                                 |
+| preference      | This key indicates if the category's preference switch is on or off. Get **OPT_IN** when the switch is on and **OPT_OUT** when the switch is off                                                                                                                                  |
+| is_editable     | Indicates if the preference switch button is disabled or not. If its value is false then the preference setting for that category can't be edited                                                                                                                                 |
+| channels        | data of all category channels to be shown below the sub-category. Loop through it to show checkboxes under every subcategory item.                                                                                                                                                |
+| digest_schedule | Digest schedule for the category, if one is configured: `id`, `label`, `frequency`, `interval`, plus `time`, `dtstart`, `weekdays` and `monthdays` fields that each carry `edit_policy`, `default_value` and the user's `value`. Update it with `updateDigestScheduleInCategory`. |
+| properties      | Custom property configured on the category, if any: `key`, `label`, `value_type`, `edit_policy`, `default_value`, the user's `value`, and `choices` for choice types. Update it with `updatePropertiesInCategory`.                                                                |
 
 ### 1.3 Category channels (sections -> sub-categories -> channels)
 
@@ -250,11 +255,11 @@ struct CategoryChannel: Codable {
 }
 ```
 
-| Property     | Description                                                                                                                                 |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| channel      | name of the channel to be shown on UI. The same key will be used as id of the channel while updating the preference.                        |
-| preference   | This key indicates if the channel's preference switch is on or off. Get OPT\_IN when the switch is on and OPT\_OUT when the switch is off   |
-| is\_editable | Indicates if the preference checkbox is disabled or not. If its value is false then the preference setting for that channel can't be edited |
+| Property    | Description                                                                                                                                 |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| channel     | name of the channel to be shown on UI. The same key will be used as id of the channel while updating the preference.                        |
+| preference  | This key indicates if the channel's preference switch is on or off. Get OPT_IN when the switch is on and OPT_OUT when the switch is off     |
+| is_editable | Indicates if the preference checkbox is disabled or not. If its value is false then the preference setting for that channel can't be edited |
 
 ### 2. Overall channel preferences
 
@@ -275,10 +280,10 @@ struct ChannelPreference: Codable {
 }
 ```
 
-| Property       | Description                                                                                                                                                                                                                                                                                  |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| channel        | name of the channel to be shown on UI. The same key will be used as id of the channel while updating the preference.                                                                                                                                                                         |
-| is\_restricted | This key indicates the restriction level of channel. If restricted, notification will only be sent in the category where this channel is added as mandatory in preference category settings. **True** means Required radio button is selected. **False** means All radio button is selected. |
+| Property      | Description                                                                                                                                                                                                                                                                                  |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| channel       | name of the channel to be shown on UI. The same key will be used as id of the channel while updating the preference.                                                                                                                                                                         |
+| is_restricted | This key indicates the restriction level of channel. If restricted, notification will only be sent in the category where this channel is added as mandatory in preference category settings. **True** means Required radio button is selected. **False** means All radio button is selected. |
 
 ## Integration
 
@@ -287,13 +292,13 @@ struct ChannelPreference: Codable {
 Use this method to get preferences data and create the preferences UI by following the above sections. This method should be called first before any update preference methods.
 
 ```swift
-await SuprSend.shared.preferences.getPreferences(args: Preferences.Args(tenantId: "", tags: "", locale: "")) 
+await SuprSend.shared.user.preferences.getPreferences(args: Preferences.Args(tenantId: "", tags: "", locale: ""))
 ```
 
 | Argument (optional) | Description                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tenantId`          | Tenant identifier for loading per-tenant preferences. Defaults to the active tenant set in `identify` or [changeTenant](../README.md#change-active-tenant)                                                                                                                                                                                                                                                            |
-| `tags`              | Filter categories by tags. Used to filter preference categories based on user's roles, department or teams. (see [Tags](https://docs.suprsend.com/docs/notification-category#tags))                                                                                                                           |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tenantId`          | Tenant identifier for loading per-tenant preferences. Defaults to the active tenant set in `identify` or [changeTenant](../README.md#change-active-tenant)                                                                                                                                                                                                                                                           |
+| `tags`              | Filter categories by tags. Used to filter preference categories based on user's roles, department or teams. (see [Tags](https://docs.suprsend.com/docs/notification-category#tags))                                                                                                                                                                                                                                  |
 | `locale`            | Locale code (for example, `es`, `fr`, `de`, `es-AR`) to fetch preference translations in user's locale. When provided, category names and descriptions will be returned in the specified locale. If a translation is missing for the requested locale, the system automatically falls back in this order: `locale-region` (for example, `es-AR`) → `locale` (for example, `es`) → `en` (English - always available). |
 
 > **Warning**
@@ -306,7 +311,7 @@ await SuprSend.shared.preferences.getPreferences(args: Preferences.Args(tenantId
 Calling this method will opt-in/opt-out users from that category-level channel. When the category's channel checkbox is editable and the user clicks on the checkbox you can call this method.
 
 ```swift
-await SuprSend.shared.preferences.updateChannelPreferenceInCategory(
+await SuprSend.shared.user.preferences.updateChannelPreferenceInCategory(
   channel: "channel",
   preference: PreferenceOptions,
   category: "category"
@@ -327,7 +332,7 @@ enum PreferenceOptions: String, Codable {
 This is category level preference changing method. Calling this method will opt-in/opt-out user from that category. When the category is editable and the switch is toggled you can call this method.
 
 ```swift
-await SuprSend.shared.preferences.updateCategoryPreference(category: "category_value", preference: PreferenceOptions)
+await SuprSend.shared.user.preferences.updateCategoryPreference(category: "category_value", preference: PreferenceOptions)
 
 enum PreferenceOptions: String, Codable {
   case optIn = "opt_in"
@@ -342,7 +347,7 @@ enum PreferenceOptions: String, Codable {
 This method updated the channel-level preference of the user.
 
 ```swift
-await SuprSend.shared.preferences.updateOverallChannelPreference(
+await SuprSend.shared.user.preferences.updateOverallChannelPreference(
   channel: "channel",
   preference: ChannelLevelPreferenceOptions
 )
@@ -357,20 +362,58 @@ enum ChannelLevelPreferenceOptions: String, Codable {
 
 ![Update overall channel preference](https://mintcdn.com/suprsend/ysJyO3LOXwZ5L098/images/docs/mobile-overall-update-channels.png?fit=max&auto=format&n=ysJyO3LOXwZ5L098&q=85&s=43fae7ed01bbb0ddde7ca1ae7fe425f4)
 
+### Update digest schedule in category
+
+Changes how often the user receives a digest for a category. Pass the `id` from the category's `digestSchedule` and only the fields you want to change; a field can be changed when its `editPolicy` is `editable`. Unlike the preference toggles above, this call is not debounced: the request is sent immediately and the returned response is the API response. On success `.preferencesUpdated` fires with refreshed data, on failure `.preferencesError` fires.
+
+```swift
+await SuprSend.shared.user.preferences.updateDigestScheduleInCategory(
+  category: "category",
+  digestSchedule: UpdateCategoryDigestSchedulePayload(
+    id: "schedule_id",
+    time: "09:00",
+    weekdays: [.monday, .friday]
+  )
+)
+```
+
+**Returns:** `async -> PreferenceAPIResponse`
+
+### Update properties in category
+
+Sets the user's value for a custom property on a category. Take `key`, `valueType` and `choices` from the category's `properties`. Values are `.string`, `.number` or `.list` of strings. Like the digest schedule call, this is sent immediately, not debounced.
+
+```swift
+await SuprSend.shared.user.preferences.updatePropertiesInCategory(
+  category: "category",
+  properties: [
+    UpdateCategoryPropertyPayload(key: "region", value: .string("us"))
+  ]
+)
+```
+
+**Returns:** `async -> PreferenceAPIResponse`
+
 ### Event listeners
 
 All preferences update api's are optimistic updates. Actual API call will happen in background with 1 second debounce. Since its a background task SDK provides event listeners to get updated preference data based on API call status. Listen to this event listeners and update the UI accordingly.
 
+`on` returns a listener handle. Listeners are not removed automatically, so call `off` with the handle when the screen goes away, or `off(.preferencesError)` to drop every listener for an event. Events are not replayed to listeners registered later.
+
 ```swift
-SuprSend.shared.emitter.on(.preferencesUpdated) { data in
+let updated = SuprSend.shared.emitter.on(.preferencesUpdated) { data in
   // update local store so that UI is updated with latest data
 }
 
-SuprSend.shared.emitter.on(.preferencesError) { error in
+let failed = SuprSend.shared.emitter.on(.preferencesError) { error in
   // show error toast to user
 }
+
+// when the screen goes away
+SuprSend.shared.emitter.off(updated)
+SuprSend.shared.emitter.off(failed)
 ```
 
 ## Example
 
-Preferences UI example code: [PreferencesView.swift](https://github.com/suprsend/suprsend-swift-sdk/blob/main/Example/SuprSendSwiftExample-iOS/Views/Profile/Preferences/PreferencesView.swift) and [PreferenceModel.swift](https://github.com/suprsend/suprsend-swift-sdk/blob/main/Example/SuprSendSwiftExample-iOS/Model/PreferenceModel.swift)
+Preferences UI example code: [PreferenceScreen.swift](https://github.com/suprsend/suprsend-swift-sdk/blob/main/Example/SwiftExample/Screens/PreferenceScreen.swift)

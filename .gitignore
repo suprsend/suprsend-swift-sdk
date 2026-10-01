@@ -11,3 +11,4 @@ DerivedData/
 /.swiftpm
 Example/build/
 /build
+Example/SwiftExample/Secrets.plist

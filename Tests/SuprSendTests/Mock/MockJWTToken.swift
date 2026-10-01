@@ -1,10 +1,3 @@
-//
-//  MockJWTToken.swift
-//  SuprSendTests
-//
-//  Created by Ram Suthar on 16/09/24.
-//
-
 import Foundation
 import CryptoKit
 
@@ -22,9 +15,9 @@ class MockJWTToken {
     }
 
     struct Payload: Encodable {
-        let entity_type: String = "subscriber" // hardcode this value to subscriber
+        let entity_type: String = "subscriber"
         let entity_id: String
-        let exp: UInt = UInt(Date.now.timeIntervalSince1970) + 3600 // token expiry timestamp in seconds
+        let exp: UInt = UInt(Date.now.timeIntervalSince1970) + 3600
         let iat: UInt = UInt(Date.now.timeIntervalSince1970)
     }
     

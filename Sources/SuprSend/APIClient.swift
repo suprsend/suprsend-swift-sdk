@@ -1,24 +1,14 @@
-//
-//  APIClient.swift
-//  SuprSend
-//
-//  Created by Ram Suthar on 21/08/24.
-//
-
 import Foundation
 
 class APIClient {
     private let config: SuprSendClient
 
-    /// Initializes the API client with a configuration.
-    /// - Parameter config: The configuration to use for the API client.
+    private let tokenRefresher = SharedInflightTask()
+
     init(config: SuprSendClient) {
         self.config = config
     }
 
-    /// Gets the full URL with the given path.
-    /// - Parameter path: The path to append to the base URL.
-    /// - Returns: The full URL, or nil if the base URL is invalid.
     private func getUrl(path: String) -> URL? {
         if path.hasPrefix("https://") || path.hasPrefix("http://") {
             URL(string: path)
@@ -29,8 +19,6 @@ class APIClient {
         }
     }
 
-    /// Gets the headers for API requests.
-    /// - Returns: A dictionary of headers to include in API requests.
     private func getHeaders() -> [String: String] {
         var headers = [
             Constants.headerContentType: Constants.headerApplicationJSON,
@@ -46,9 +34,6 @@ class APIClient {
         return headers
     }
 
-    /// Makes an API request using the given data.
-    /// - Parameter reqData: The data to use for the API request.
-    /// - Returns: A response object representing the result of the API request.
     private func requestApiInstance<R: Response>(reqData: HandleRequest) async throws -> R {
         switch reqData.type {
         case .get:
@@ -60,9 +45,6 @@ class APIClient {
         }
     }
 
-    /// Makes a GET API request using the given path.
-    /// - Parameter path: The path to use for the GET request.
-    /// - Returns: A response object representing the result of the GET request.
     private func get<R: Response>(path: String) async throws -> R {
         guard let url = getUrl(path: path) else {
             return .error(.init(type: .validation, message: "Can't create a URL for path: \(path)"))
@@ -71,10 +53,6 @@ class APIClient {
         return try await fetch(url, method: .get, headers: getHeaders())
     }
 
-    /// Makes a POST API request using the given path and payload.
-    /// - Parameter path: The path to use for the POST request.
-    /// - Parameter payload: The data to include in the POST request body.
-    /// - Returns: A response object representing the result of the POST request.
     private func post<R: Response>(path: String, payload: AnyEncodable) async throws -> R {
         guard let url = getUrl(path: path) else {
             return .error(.init(type: .validation, message: "Can't create a URL for path: \(path)"))
@@ -83,10 +61,6 @@ class APIClient {
         return try await fetch(url, method: .post, body: payload, headers: getHeaders())
     }
 
-    /// Makes a PATCH API request using the given path and payload.
-    /// - Parameter path: The path to use for the PATCH request.
-    /// - Parameter payload: The data to include in the PATCH request body.
-    /// - Returns: A response object representing the result of the PATCH request.
     private func patch<R: Response>(path: String, payload: AnyEncodable) async throws -> R {
         guard let url = getUrl(path: path) else {
             return .error(.init(type: .validation, message: "Can't create a URL for path: \(path)"))
@@ -95,11 +69,56 @@ class APIClient {
         return try await fetch(url, method: .patch, body: payload, headers: getHeaders())
     }
 
-    /// Makes an API request using the given data.
-    /// - Parameter reqData: The data to use for the API request.
-    /// - Returns: A response object representing the result of the API request.
+    static func isUserTokenExpiring(expiresOn: TimeInterval, now: TimeInterval) -> Bool {
+        expiresOn - Constants.userTokenRefreshBefore <= now
+    }
+
+    func refreshExpiringUserToken() async {
+        guard let distinctID = config.distinctID,
+              let userToken = config.userToken,
+              let refreshUserToken = config.authenticateOptions?.refreshUserToken else {
+            return
+        }
+
+        guard let jwtPayload = try? Utils.shared.decode(jwtToken: userToken) else {
+            logger.warning("[SuprSend]: Couldn't decode userToken, skipping refresh")
+            return
+        }
+
+        guard let expiresOn = jwtPayload[Constants.expiryKeyJWT] as? Double else {
+            return
+        }
+
+        guard Self.isUserTokenExpiring(expiresOn: expiresOn, now: Date.now.timeIntervalSince1970) else {
+            return
+        }
+
+        await tokenRefresher.run { [config] in
+            do {
+                guard let newUserToken = try await refreshUserToken(userToken, jwtPayload),
+                      !newUserToken.isEmpty else {
+                    return
+                }
+
+                // Session changed during the callback; don't apply the token to the new one.
+                guard config.distinctID == distinctID, config.userToken == userToken else {
+                    logger.warning("[SuprSend]: Session changed while refreshing userToken, discarding refreshed token")
+                    return
+                }
+
+                _ = await config.identify(
+                    distinctID: distinctID,
+                    userToken: newUserToken,
+                    options: config.authenticateOptions
+                )
+            } catch {
+                logger.warning("[SuprSend]: Couldn't fetch new userToken: \(error.localizedDescription)")
+            }
+        }
+    }
+
     func request<R: Response>(reqData: HandleRequest) async -> R {
-        guard let distinctID = config.distinctID else {
+        guard config.distinctID != nil else {
             return .error(
                 .init(
                     type: .validation,
@@ -108,34 +127,7 @@ class APIClient {
                 ))
         }
 
-        if let refreshUserToken = config.authenticateOptions?.refreshUserToken,
-            let userToken = config.userToken
-        {
-            
-            let jwtPayload = try? Utils.shared.decode(jwtToken: userToken)
-            let expiresOn = (jwtPayload?[Constants.expiryKeyJWT] as? Double ?? .zero)
-            let now = Date.now.timeIntervalSince1970
-            let hasExpired = expiresOn <= now
-            
-            if hasExpired {
-                do {
-                    let newUserToken = try await refreshUserToken(
-                        userToken,
-                        jwtPayload ?? .init()
-                    )
-                    
-                    if let newUserToken {
-                        _ = await config.identify(
-                            distinctID: distinctID,
-                            userToken: newUserToken,
-                            options: config.authenticateOptions
-                        )
-                    }
-                } catch {
-                    // error while getting token go ahead with calling api
-                }
-            }
-        }
+        await refreshExpiringUserToken()
 
         do {
             return try await requestApiInstance(reqData: reqData)
@@ -156,13 +148,6 @@ class APIClient {
         }
     }
 
-    /// Fetches data from the given URL using the specified method and headers.
-    /// - Parameters:
-    ///   - url: The URL to fetch data from.
-    ///   - method: The HTTP method to use for the request.
-    ///   - body: The data to include in the request body (optional).
-    ///   - headers: The headers to include in the request (optional).
-    /// - Returns: A response object representing the result of the fetch request.
     private func fetch<R: Response>(
         _ url: URL,
         method: HandleRequest.RequestType,
@@ -195,10 +180,9 @@ class APIClient {
                 logger.error("SuprSend: \(methodString) \(urlString) \(httpResponse?.statusCode ?? 0) \(message)")
             }
 
-            // Server doesn't echo HTTP status into the JSON body — populate
-            // statusCode from the actual HTTP response so callers can see it.
+            // Server doesn't echo HTTP status in the body; take it from the response.
             return R.init(
-                status: decoded.status,
+                status: (200..<300).contains(httpResponse?.statusCode ?? 0) ? .success : .error,
                 statusCode: httpResponse?.statusCode,
                 body: decoded.body,
                 error: decoded.error
@@ -208,5 +192,25 @@ class APIClient {
         }
 
         return .error(.init(type: .unknown, message: nil), statusCode: httpResponse?.statusCode)
+    }
+}
+
+actor SharedInflightTask {
+    private var inflight: Task<Void, Never>?
+
+    func run(_ operation: @escaping @Sendable () async -> Void) async {
+        if inflight == nil {
+            // Task inherits actor isolation, so finish() runs before a stale inflight is observable.
+            inflight = Task {
+                await operation()
+                self.finish()
+            }
+        }
+
+        await inflight?.value
+    }
+
+    private func finish() {
+        inflight = nil
     }
 }

@@ -1,10 +1,3 @@
-//
-//  FeedTest.swift
-//  SuprSend
-//
-//  Created by Ram Suthar on 30/07/25.
-//
-
 import Testing
 @testable import SuprSend
 
@@ -82,24 +75,20 @@ class FeedTest {
         }
         
         if let meta = response.body?.meta {
-            // Test metadata properties if available
             #expect(meta != nil, "Meta should contain pagination info")
         }
     }
     
     @Test("Fetch next page handles pagination")
     func fetchNextPage() async throws {
-        // First fetch initial page
         let initialResponse = await feed.fetch()
         #expect(initialResponse.error == nil, "Initial fetch should succeed")
         
-        // Then fetch next page
         let nextPageResponse = await feed.fetchNextPage()
         
         #expect(nextPageResponse.error?.type == nil, "Should not have error type")
         #expect(nextPageResponse.error?.message == nil, "Should not have error message")
         
-        // If there's a next page available
         if nextPageResponse.body?.results != nil {
             #expect(nextPageResponse.body?.results != nil, "Should have results if successful")
         }
@@ -109,13 +98,11 @@ class FeedTest {
     
     @Test("Mark as seen updates notification status")
     func markAsSeen() async throws {
-        // First fetch some notifications
         let fetchResponse = await feed.fetch()
         #expect(fetchResponse.error == nil, "Fetch should succeed")
         
         guard let firstNotification = fetchResponse.body?.results?.first,
               let notificationId = firstNotification["id"] as? String else {
-            // Skip test if no notifications available
             return
         }
         
@@ -131,13 +118,11 @@ class FeedTest {
     
     @Test("Mark as read updates notification read status")
     func markAsRead() async throws {
-        // First fetch some notifications
         let fetchResponse = await feed.fetch()
         #expect(fetchResponse.error == nil, "Fetch should succeed")
         
         guard let firstNotification = fetchResponse.body?.results?.first,
               let notificationId = firstNotification["id"] as? String else {
-            // Skip test if no notifications available
             return
         }
         
@@ -161,7 +146,6 @@ class FeedTest {
         if let storesList = stores {
             #expect(storesList.count >= 0, "Stores should be a valid array")
             
-            // Check if default store exists
             let hasDefaultStore = storesList.contains { store in
                 store["is_default"] as? Bool == true
             }
@@ -171,20 +155,17 @@ class FeedTest {
     
     @Test("Set active store changes current store")
     func setActiveStore() async throws {
-        // Get available stores first
         let stores = await feed.getStores()
         
         guard let storesList = stores,
               !storesList.isEmpty,
               let firstStore = storesList.first,
               let storeId = firstStore["id"] as? String else {
-            // Skip test if no stores available
             return
         }
         
         await feed.setActiveStore(storeId: storeId)
         
-        // Verify store was set (fetch again to confirm)
         let response = await feed.fetch()
         #expect(response.error == nil, "Fetch after store change should succeed")
     }
@@ -193,14 +174,12 @@ class FeedTest {
     
     @Test("Apply filters to feed")
     func applyFilters() async throws {
-        // Test with read filter
         let readFilter = ["read": true]
         await feed.applyFilters(filters: readFilter)
         
         let response = await feed.fetch()
         #expect(response.error == nil, "Fetch with filters should succeed")
         
-        // Clear filters
         await feed.clearFilters()
         
         let unfiltereredResponse = await feed.fetch()
@@ -209,11 +188,9 @@ class FeedTest {
     
     @Test("Clear filters removes all filters")
     func clearFilters() async throws {
-        // Apply some filters first
         let filters = ["read": false, "seen": false]
         await feed.applyFilters(filters: filters)
         
-        // Clear filters
         await feed.clearFilters()
         
         let response = await feed.fetch()
@@ -231,13 +208,10 @@ class FeedTest {
             #expect(update != nil, "Update should contain data")
         }
         
-        // Wait a bit for potential updates
-        try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+        try await Task.sleep(nanoseconds: 2_000_000_000)
         
-        // Clean up subscription
         cancellable?.cancel()
         
-        // Note: updateReceived might still be false if no real-time updates occurred
         #expect(cancellable != nil, "Should return a valid cancellable")
     }
     
@@ -248,15 +222,11 @@ class FeedTest {
         let invalidId = "invalid-notification-id-12345"
         
         let markResponse = await feed.markAsSeen(notificationId: invalidId)
-        // The API might still return success or a specific error
-        // Adjust expectation based on actual API behavior
         #expect(markResponse != nil, "Should return a response even for invalid ID")
     }
     
     @Test("Handle network errors gracefully")
     func handleNetworkErrors() async throws {
-        // This test would require mocking network failures
-        // For now, we just ensure the methods handle nil/empty responses
         
         let response = await feed.fetch()
         #expect(response != nil, "Should always return a response object")
@@ -271,22 +241,18 @@ class FeedTest {
     
     @Test("Pagination maintains correct order")
     func paginationOrder() async throws {
-        // Fetch first page
         let firstPage = await feed.fetch()
         #expect(firstPage.error == nil, "First page fetch should succeed")
         
         guard let firstPageResults = firstPage.body?.results,
               !firstPageResults.isEmpty else {
-            // Skip if no data
             return
         }
         
-        // Fetch next page
         let secondPage = await feed.fetchNextPage()
         
         if let secondPageResults = secondPage.body?.results,
            !secondPageResults.isEmpty {
-            // Verify no duplicate IDs between pages
             let firstPageIds = Set(firstPageResults.compactMap { $0["id"] as? String })
             let secondPageIds = Set(secondPageResults.compactMap { $0["id"] as? String })
             
@@ -301,7 +267,6 @@ class FeedTest {
         #expect(response.error == nil, "Fetch should succeed")
         
         if let meta = response.body?.meta {
-            // Check if metadata indicates more pages
             if let hasMore = meta["has_next"] as? Bool {
                 #expect(hasMore == true || hasMore == false, "Has more should be a valid boolean")
             }
@@ -312,7 +277,6 @@ class FeedTest {
     
     @Test("Concurrent fetch operations")
     func concurrentFetches() async throws {
-        // Run multiple fetch operations concurrently
         async let fetch1 = feed.fetch()
         async let fetch2 = feed.fetchCount()
         async let fetch3 = feed.getStores()
@@ -330,21 +294,17 @@ class FeedTest {
     
     @Test("Feed maintains state across operations")
     func feedStateManagement() async throws {
-        // Fetch initial state
         let initialCount = await feed.fetchCount()
         #expect(initialCount.error == nil, "Initial count fetch should succeed")
         
         let initialBadge = initialCount.body?.badge ?? 0
         
-        // Perform some operations
         let fetchResponse = await feed.fetch()
         #expect(fetchResponse.error == nil, "Fetch should succeed")
         
-        // Check if count is consistent
         let afterFetchCount = await feed.fetchCount()
         #expect(afterFetchCount.error == nil, "Count fetch after operations should succeed")
         
-        // The badge count should be consistent unless notifications changed
         if let newBadge = afterFetchCount.body?.badge {
             #expect(newBadge >= 0, "Badge should remain non-negative")
         }

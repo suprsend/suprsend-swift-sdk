@@ -9,6 +9,11 @@ final class PreferenceViewModel: ObservableObject {
 
     private let tenant: String? = nil
     private let tags: PreferenceTags? = .dictionary(["exists": true])
+    private var listeners: [SuprSend.Emitter.Listener] = []
+
+    deinit {
+        listeners.forEach { SuprSend.shared.emitter.off($0) }
+    }
 
     func load() {
         Task { @MainActor in
@@ -22,18 +27,24 @@ final class PreferenceViewModel: ObservableObject {
                 print("[Preferences] load error: \(message)")
             }
             loading = false
+            subscribe()
+        }
+    }
 
+    private func subscribe() {
+        listeners.forEach { SuprSend.shared.emitter.off($0) }
+        listeners = [
             SuprSend.shared.emitter.on(.preferencesUpdated) { [weak self] resp in
                 Task { @MainActor in
                     if let body = resp?.body {
                         self?.preferenceData = body
                     }
                 }
-            }
+            },
             SuprSend.shared.emitter.on(.preferencesError) { resp in
                 print("[Preferences] update error: \(resp?.error?.message ?? "unknown")")
-            }
-        }
+            },
+        ]
     }
 
     func updateCategory(_ category: SuprSend.Category, optIn: Bool) {
@@ -335,4 +346,3 @@ private struct RadioRow: View {
         .buttonStyle(.plain)
     }
 }
-

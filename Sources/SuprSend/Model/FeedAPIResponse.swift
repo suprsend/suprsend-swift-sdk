@@ -1,10 +1,3 @@
-//
-//  File.swift
-//  SuprSend
-//
-//  Created by Ram Suthar on 30/07/25.
-//
-
 import Foundation
 
 public struct FeedAPIResponse: Response {
@@ -237,11 +230,16 @@ public class IPageInfo: NSObject {
 }
 
 public enum APIResponseStatus: String, Codable {
-    case initial = "INITIAL" //  Before any request is made (or after a reset).
-    case loading = "LOADING" // The initial API call is in progress
-    case success = "SUCCESS" // The API call was successful, and data has been received
-    case error = "ERROR" // The API call failed (network issue, server issue, etc.)
-    case fetchingMore = "FETCHING_MORE" //  The API call is fetching additional data (for pagination or infinite scroll)
+    /// Before any request is made (or after a reset).
+    case initial = "INITIAL"
+    /// The initial API call is in progress.
+    case loading = "LOADING"
+    /// The API call was successful, and data has been received.
+    case success = "SUCCESS"
+    /// The API call failed (network issue, server issue, etc.).
+    case error = "ERROR"
+    /// The API call is fetching additional data (for pagination or infinite scroll).
+    case fetchingMore = "FETCHING_MORE"
 }
 
 public class IInboxFetchOptions: NSObject {

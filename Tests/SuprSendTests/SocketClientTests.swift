@@ -1,0 +1,170 @@
+import Foundation
+import Combine
+import Testing
+
+@testable import SuprSend
+
+struct SocketClientTests {
+
+    // Unroutable port so the transport never opens; tests drive frames directly.
+    private func makeClient() -> SocketClient {
+        SocketClient(serverURL: "http://127.0.0.1:1", headers: [:])
+    }
+
+    @Test func connectErrorStopsRetrying() {
+        let client = makeClient()
+        var errors: [String] = []
+        let sub = client.connectError.sink { errors.append($0) }
+        client.connect()
+
+        client.handleTextMessage(#"44{"message":"limit reached"}"#)
+
+        #expect(client.active == false)
+        #expect(client.isReconnecting == false)
+        #expect(client.webSocketTask == nil)
+        #expect(client.connectionStatus == .error)
+        #expect(errors == ["limit reached"])
+        sub.cancel()
+    }
+
+    @Test func authConnectErrorIsForwarded() {
+        let client = makeClient()
+        var errors: [String] = []
+        let sub = client.connectError.sink { errors.append($0) }
+        client.connect()
+
+        client.handleTextMessage(#"44{"message":"Authentication Error: wrong auth token"}"#)
+
+        #expect(errors == ["Authentication Error: wrong auth token"])
+        #expect(client.active == false)
+        sub.cancel()
+    }
+
+    @Test func serverDisconnectStopsRetrying() {
+        let client = makeClient()
+        client.connect()
+
+        client.handleTextMessage("41")
+
+        #expect(client.active == false)
+        #expect(client.isReconnecting == false)
+    }
+
+    @Test func goingAwayCloseRetriesWhileActive() throws {
+        let client = makeClient()
+        client.connect()
+        let task = try #require(client.webSocketTask)
+
+        client.urlSession(URLSession.shared, webSocketTask: task, didCloseWith: .goingAway, reason: nil)
+
+        #expect(client.active == true)
+        #expect(client.isReconnecting == true)
+        client.disconnect()
+    }
+
+    @Test func closeAfterDisconnectDoesNotRetry() throws {
+        let client = makeClient()
+        client.connect()
+        let task = try #require(client.webSocketTask)
+        client.disconnect()
+
+        client.urlSession(URLSession.shared, webSocketTask: task, didCloseWith: .normalClosure, reason: nil)
+
+        #expect(client.active == false)
+        #expect(client.isReconnecting == false)
+    }
+
+    @Test func disconnectReleasesClient() async throws {
+        weak var weakClient: SocketClient?
+        do {
+            let client = makeClient()
+            weakClient = client
+            client.connect()
+            client.disconnect()
+        }
+
+        // URLSession drops its delegate asynchronously after invalidation.
+        for _ in 0..<40 where weakClient != nil {
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        #expect(weakClient == nil)
+    }
+
+    @Test func connectedOnlyAfterNamespaceAck() {
+        let client = makeClient()
+        client.connect()
+        #expect(client.connectionStatus != .connected)
+
+        client.handleTextMessage(#"40{"sid":"abc"}"#)
+
+        #expect(client.connectionStatus == .connected)
+        client.disconnect()
+    }
+
+    @Test func firstConnectSendsNoRecoveryFields() {
+        let client = makeClient()
+        var events: [Bool] = []
+        let sub = client.reconnected.sink { events.append($0) }
+
+        #expect(!client.connectPayload().contains("pid"))
+        client.handleTextMessage(#"40{"sid":"a","pid":"p1"}"#)
+
+        #expect(client.pid == "p1")
+        #expect(events.isEmpty)
+        sub.cancel()
+    }
+
+    @Test func reconnectSendsPidAndLastOffset() throws {
+        let client = makeClient()
+        client.handleTextMessage(#"40{"sid":"a","pid":"p1"}"#)
+        client.handleTextMessage(#"42["new_notification",{"n_id":"1"},"o1"]"#)
+        client.handleTextMessage(#"42["reset_badge","o2"]"#)
+
+        #expect(client.lastOffset == "o2")
+        let payload = String(client.connectPayload().dropFirst(2))
+        let auth = try #require(try JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: String])
+        #expect(auth["pid"] == "p1")
+        #expect(auth["offset"] == "o2")
+    }
+
+    @Test func samePidIsRecovered() {
+        let client = makeClient()
+        var events: [Bool] = []
+        let sub = client.reconnected.sink { events.append($0) }
+
+        client.handleTextMessage(#"40{"sid":"a","pid":"p1"}"#)
+        client.handleTextMessage(#"42["new_notification",{},"o1"]"#)
+        client.handleTextMessage(#"40{"sid":"b","pid":"p1"}"#)
+
+        #expect(events == [true])
+        #expect(client.lastOffset == "o1")
+        sub.cancel()
+    }
+
+    @Test func newPidIsNotRecovered() {
+        let client = makeClient()
+        var events: [Bool] = []
+        let sub = client.reconnected.sink { events.append($0) }
+
+        client.handleTextMessage(#"40{"sid":"a","pid":"p1"}"#)
+        client.handleTextMessage(#"42["new_notification",{},"o1"]"#)
+        client.handleTextMessage(#"40{"sid":"b","pid":"p2"}"#)
+
+        #expect(events == [false])
+        #expect(client.pid == "p2")
+        #expect(client.lastOffset == nil)
+        sub.cancel()
+    }
+
+    @Test func disconnectClearsRecoveryState() {
+        let client = makeClient()
+        client.connect()
+        client.handleTextMessage(#"40{"sid":"a","pid":"p1"}"#)
+        client.handleTextMessage(#"42["new_notification",{},"o1"]"#)
+
+        client.disconnect()
+
+        #expect(client.pid == nil)
+        #expect(client.lastOffset == nil)
+    }
+}

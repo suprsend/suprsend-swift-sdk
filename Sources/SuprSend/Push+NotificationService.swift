@@ -1,10 +1,3 @@
-//
-//  Push+NotificationService.swift
-//  SuprSend
-//
-//  Created by Ram Suthar on 24/09/24.
-//
-
 #if os(iOS) || os(watchOS) || os(tvOS)
 import UserNotifications
 import UIKit
@@ -31,8 +24,6 @@ open class SuprSendNotificationService: UNNotificationServiceExtension {
         SuprSendClient.shared.push.didReceive(request, withContentHandler: contentHandler)
         
         if let modifiedNotificationContent = modifiedNotificationContent {
-            // Modify the notification content here...
-            // 1
             guard let imageURLString =
                     modifiedNotificationContent.userInfo["image_url"] as? String else {
                 contentHandler(modifiedNotificationContent)
@@ -63,8 +54,6 @@ open class SuprSendNotificationService: UNNotificationServiceExtension {
     }
     
     public override func serviceExtensionTimeWillExpire() {
-        // Called just before the extension will be terminated by the system.
-        // Use this as an opportunity to deliver your "best attempt" at modified content, otherwise the original push payload will be used.
         if let contentHandler = contentHandler, let bestAttemptContent =  modifiedNotificationContent {
             contentHandler(bestAttemptContent)
         }
@@ -102,7 +91,6 @@ extension SuprSendNotificationService {
     
     private func getMediaAttachment(for urlString: String, completion: @escaping (UIImage?) -> Void
     ) {
-        // 1
         guard let url = URL(string: urlString) else {
             completion(nil)
             return

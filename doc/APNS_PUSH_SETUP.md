@@ -33,7 +33,7 @@ class AppDelegate: NSObject, UNUserNotificationCenterDelegate { // implement UNU
   func registerForPush() {
     UNUserNotificationCenter.current().delegate = self // this willregister push delegate
 
-    // ask user for permission 
+    // ask user for permission
     // options = [.sound, .badge, .alert] for explicit authorization
     // options = [.badge, .alert, .sound, .provisional] for provisional authorization
     UNUserNotificationCenter.current().requestAuthorization(
@@ -150,7 +150,7 @@ In second dialog box, select your Notification Service target from dropdown and 
 
 ```ruby
 target '<your_notification_service_name>' do
-  pod 'SuprSendSwift', :git => 'https://github.com/suprsend/suprsend-swift-sdk.git', :tag => '2.0.1'
+  pod 'SuprSendSwift', :git => 'https://github.com/suprsend/suprsend-swift-sdk.git', :tag => '2.2.0'
 end
 ```
 

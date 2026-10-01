@@ -40,7 +40,6 @@ struct RootView: View {
 
     private func handleLogout() {
         Task {
-            await SuprSend.shared.push.removePushSubscription()
             _ = await SuprSend.shared.reset()
             await MainActor.run {
                 distinctID = ""

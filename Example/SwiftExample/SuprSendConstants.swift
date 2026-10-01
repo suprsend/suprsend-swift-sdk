@@ -1,26 +1,25 @@
 import Foundation
 
-/// Configuration for this example app — edit these to point it at your own workspace.
 enum SuprSendConstants {
-    static let publicKey: String = ""
-    static let host: String? = nil  // optional override for self-hosted collectors
+    static let publicKey: String = secret("publicKey") ?? ""
+    static let host: String? = secret("host")
 
-    /// Backend that mints JWT user tokens. Point this at your own to exercise the
-    /// authenticated identify flow; while it's blank the example falls back to an
-    /// unauthenticated `identify(distinctID:)`.
-    static let tokenBaseURL: String = ""
+    static let tokenBaseURL: String = secret("tokenBaseURL") ?? ""
 
-    /// Inbox feed hosts. These are *separate* from `host` above — the inbox does
-    /// not route through the collector, so pointing `host` at a staging collector
-    /// leaves the feed on its own endpoints. Leave both `nil` to use the SDK's
-    /// defaults; set either to override just that one.
-    static let feedAPIHost: String? = nil
-    static let feedSocketHost: String? = nil
+    static let feedAPIHost: String? = secret("feedAPIHost")
+    static let feedSocketHost: String? = secret("feedSocketHost")
+
+    // Secrets.plist is gitignored; copy Secrets.example.plist to create it.
+    private static let secrets: [String: Any] =
+        Bundle.main.url(forResource: "Secrets", withExtension: "plist")
+            .flatMap { NSDictionary(contentsOf: $0) as? [String: Any] } ?? [:]
+
+    private static func secret(_ key: String) -> String? {
+        guard let value = secrets[key] as? String, !value.isEmpty else { return nil }
+        return value
+    }
 }
 
-/// UserDefaults keys backing the example's login state. Internal plumbing, not SDK
-/// configuration — named because each key is read both via @AppStorage in the views
-/// and directly from UserDefaults in AppDelegate.
 enum StorageKeys {
     static let distinctID: String = "suprsend_example_distinct_id"
     static let tenantID: String = "suprsend_example_tenant_id"

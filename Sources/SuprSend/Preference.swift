@@ -1,10 +1,3 @@
-//
-//  Preference.swift
-//  SuprSend
-//
-//  Created by Ram Suthar on 05/09/24.
-//
-
 import Foundation
 
 /// A class representing preferences.
@@ -85,7 +78,7 @@ public class Preferences {
 
     private let config: SuprSendClient
     private var preferenceData: PreferenceData?
-    private var preferenceArgs: Args?
+    private(set) var preferenceArgs: Args?
 
     struct UpdateCategoryParams {
         let category: String
@@ -99,23 +92,16 @@ public class Preferences {
         let args: Args?
     }
 
-    /// Per-category debounce. Mirrors the web SDK's `debounceByType(_, 1000ms)`
-    /// keyed by category — rapid toggles to the *same* category coalesce into
-    /// one PATCH; toggles across *different* categories each fire their own
-    /// PATCH.
     private let categoryPreferenceDebouncer = KeyedDebouncer<UpdateCategoryParams>(
         delayNanoseconds: Preferences.debounceDelayNanoseconds
     )
 
-    /// Per-channel debounce for channel-level (`channel_preference`) updates.
     private let channelPreferenceDebouncer = KeyedDebouncer<UpdateChannelParams>(
         delayNanoseconds: Preferences.debounceDelayNanoseconds
     )
 
-    /// Debounce window in nanoseconds. Matches the web SDK's 1000 ms.
     private static let debounceDelayNanoseconds: UInt64 = 1_000_000_000
 
-    /// The current preference data.
     var data: PreferenceData? {
         get {
             preferenceData
@@ -131,7 +117,7 @@ public class Preferences {
         categoryPreferenceDebouncer.action = { [weak self] params in
             _ = await self?._updateCategoryPreferences(
                 category: params.category,
-                body: params.body,
+                body: .init(params.body),
                 subCategory: params.subCategory,
                 args: params.args
             )
@@ -142,10 +128,13 @@ public class Preferences {
         }
     }
 
-    /// Returns a URL for making API requests.
-    /// - Parameters:
-    ///   - path: The path to append to the base URL. Defaults to `nil`.
-    ///   - qp: Query parameters to include in the request. Defaults to an empty dictionary.
+    public func reset() {
+        categoryPreferenceDebouncer.cancelAll()
+        channelPreferenceDebouncer.cancelAll()
+        preferenceData = nil
+        preferenceArgs = nil
+    }
+
     func getUrlpath(path: String? = nil, qp: [String: Any?]? = nil) -> URL {
         let distinctID = config.distinctID?.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String()
         var urlPath = "v1/user/\(distinctID)/preference/"
@@ -162,14 +151,11 @@ public class Preferences {
 
         var urlComponents = URLComponents(string: urlPath)!
         if let queryParams {
-            urlComponents.queryItems = queryParams
+            Utils.shared.setQueryItems(queryParams, on: &urlComponents)
         }
         return urlComponents.url!
     }
 
-    /// Encodes a ``PreferenceTags`` value into the form expected on the wire.
-    /// String tags are passed through as-is; dictionary tags are serialised as
-    /// JSON. Mirrors the web SDK's `validateQueryParams` branch on `object`.
     private func encodeTags(_ tags: PreferenceTags?) -> String? {
         guard let tags else { return nil }
         switch tags {
@@ -185,21 +171,12 @@ public class Preferences {
         }
     }
 
-    /// Resolves the effective `show_opt_out_channels` query value using the
-    /// web SDK priority: explicit arg → value stored from the last
-    /// ``getPreferences(args:)`` call → `true`.
     private func resolveShowOptOutChannels(_ args: Args?) -> Bool {
         args?.showOptOutChannels
             ?? preferenceArgs?.showOptOutChannels
             ?? true
     }
 
-    /// Captures the effective ``Args`` for an update call by folding the
-    /// caller-supplied ``Args`` over the stored ``preferenceArgs`` (set by the
-    /// last ``getPreferences(args:)`` call). This snapshot is what reaches the
-    /// PATCH URL after debouncing, so the URL reflects intent at call-time
-    /// rather than whatever the stored args happen to be when the debouncer
-    /// fires.
     private func resolvedArgs(_ args: Args?, showOptOutChannels: Bool) -> Args {
         Args(
             tenantId: args?.tenantId ?? preferenceArgs?.tenantId ?? config.tenantId,
@@ -220,7 +197,12 @@ public class Preferences {
             "tags": encodeTags(args?.tags),
             "locale": args?.locale,
         ]
-        preferenceArgs = args
+        preferenceArgs = Args(
+            tenantId: args?.tenantId ?? config.tenantId,
+            showOptOutChannels: args?.showOptOutChannels ?? true,
+            tags: args?.tags,
+            locale: args?.locale
+        )
 
         let path = getUrlpath(qp: queryParams)
 
@@ -289,7 +271,7 @@ public class Preferences {
 
     private func _updateCategoryPreferences(
         category: String,
-        body: RequestPayload,
+        body: AnyEncodable,
         subCategory: Category,
         args: Args? = nil
     ) async -> PreferenceAPIResponse {
@@ -305,19 +287,14 @@ public class Preferences {
         let response: PreferenceAPIResponse = await config.client().request(
             reqData: .init(
                 path: path.absoluteString,
-                payload: .init(body),
+                payload: body,
                 type: .patch
             )
         )
 
-        if response.error != nil {
-            config.emitter.emit(event: .preferencesError, data: response)
-        } else {
-            //            subCategory = response.body
-            let response = await getPreferences(args: preferenceArgs)
-            config.emitter.emit(event: .preferencesUpdated, data: response)
-        }
+        guard !Task.isCancelled else { return response }
 
+        await emitUpdateResult(response)
         return response
     }
 
@@ -337,13 +314,21 @@ public class Preferences {
                 type: .patch
             )
         )
+
+        guard !Task.isCancelled else { return response }
+
+        await emitUpdateResult(response)
+        return response
+    }
+
+    private func emitUpdateResult(_ response: PreferenceAPIResponse) async {
         if response.error != nil {
             config.emitter.emit(event: .preferencesError, data: response)
-        } else {
-            let response = await getPreferences(args: preferenceArgs)
-            config.emitter.emit(event: .preferencesUpdated, data: response)
+            return
         }
-        return response
+        // Emit the local store like the web SDK; a failed refresh must not surface as an update.
+        _ = await getPreferences(args: preferenceArgs)
+        config.emitter.emit(event: .preferencesUpdated, data: .success(statusCode: 200, body: data))
     }
 
     /// Used to update user's category level preference.
@@ -371,7 +356,6 @@ public class Preferences {
         var categoryData: Category? = nil
         var dataUpdated = false
 
-        // optimistic update in local store
         for section in sections {
             var abort = false
             if section.subcategories == nil {
@@ -388,7 +372,6 @@ public class Preferences {
                             abort = true
                             break
                         } else {
-                            // Category is already set status
                         }
                     } else {
                         return .error(
@@ -466,7 +449,6 @@ public class Preferences {
         var selectedChannelData: CategoryChannel? = nil
         var dataUpdated = false
 
-        // optimistic update in local store
         for section in sections {
             var abort = false
             guard let subcategories = section.subcategories else {
@@ -493,7 +475,6 @@ public class Preferences {
                                     abort = true
                                     break
                                 } else {
-                                    // Channel is already set
                                 }
                             } else {
                                 return .error(
@@ -554,6 +535,93 @@ public class Preferences {
         return .success(body: data)
     }
 
+    /// Used to update user's category level digest schedule. Sent immediately, not debounced.
+    /// - Parameters:
+    ///   - category: The ID of the category to update.
+    ///   - digestSchedule: The schedule fields to apply. `id` must match the category's ``Category/digestSchedule``.
+    ///   - args: Arguments for the request. Defaults to `nil`.
+    public func updateDigestScheduleInCategory(
+        category: String,
+        digestSchedule: UpdateCategoryDigestSchedulePayload,
+        args: Args? = nil
+    ) async -> PreferenceAPIResponse {
+        switch findCategory(category) {
+        case .failed(let response):
+            return response
+        case .found(let categoryData):
+            return await sendCategoryUpdate(
+                category: category,
+                categoryData: categoryData,
+                payload: DigestScheduleRequestPayload(
+                    digestSchedule: digestSchedule, preference: categoryData.preference),
+                args: args
+            )
+        }
+    }
+
+    /// Used to update user's category level properties. Sent immediately, not debounced.
+    /// - Parameters:
+    ///   - category: The ID of the category to update.
+    ///   - properties: Property values to apply. Keys come from the category's ``Category/properties``.
+    ///   - args: Arguments for the request. Defaults to `nil`.
+    public func updatePropertiesInCategory(
+        category: String,
+        properties: [UpdateCategoryPropertyPayload],
+        args: Args? = nil
+    ) async -> PreferenceAPIResponse {
+        switch findCategory(category) {
+        case .failed(let response):
+            return response
+        case .found(let categoryData):
+            return await sendCategoryUpdate(
+                category: category,
+                categoryData: categoryData,
+                payload: PropertiesRequestPayload(
+                    properties: properties, preference: categoryData.preference),
+                args: args
+            )
+        }
+    }
+
+    private enum CategoryLookup {
+        case found(Category)
+        case failed(PreferenceAPIResponse)
+    }
+
+    private func findCategory(_ category: String) -> CategoryLookup {
+        guard let data else {
+            return .failed(
+                .error(
+                    .init(
+                        type: .validation,
+                        message: "Call getPreferences method before performing action")))
+        }
+        guard let sections = data.sections else {
+            return .failed(.error(.init(type: .validation, message: "Sections doesn't exist")))
+        }
+        for section in sections {
+            if let match = section.subcategories?.first(where: { $0.category == category }) {
+                return .found(match)
+            }
+        }
+        return .failed(.error(.init(type: .validation, message: "Category not found")))
+    }
+
+    private func sendCategoryUpdate<Payload: Encodable>(
+        category: String,
+        categoryData: Category,
+        payload: Payload,
+        args: Args?
+    ) async -> PreferenceAPIResponse {
+        let showOptOutChannels = resolveShowOptOutChannels(args)
+        return await _updateCategoryPreferences(
+            category: category,
+            body: .init(payload),
+            subCategory: categoryData,
+            args: resolvedArgs(args, showOptOutChannels: showOptOutChannels)
+        )
+    }
+
     /// Used to update overall channel preferences.
     /// - Parameters:
     ///   - channel: The ID of the channel to update. Defaults to `nil`.
@@ -609,21 +677,11 @@ public class Preferences {
     }
 }
 
-/// A per-key debouncer that mirrors the web SDK's `debounceByType`.
-///
-/// Each unique `key` has its own pending task. A new `send` for the same key
-/// cancels the in-flight task and starts a fresh delay so the *latest* payload
-/// wins. Sends for different keys are independent and run in parallel — this
-/// is the key behavioural difference vs a single `Combine.debounce` upstream,
-/// which would drop earlier different-key events when rapid sends arrive
-/// inside the debounce window.
 final class KeyedDebouncer<Payload>: @unchecked Sendable {
     private let lock = NSLock()
     private var tasks: [String: Task<Void, Never>] = [:]
     private let delayNanoseconds: UInt64
 
-    /// Invoked once per debounced key with the latest payload for that key.
-    /// Set after construction so the closure can capture `self` weakly.
     var action: ((Payload) async -> Void)?
 
     init(delayNanoseconds: UInt64) {

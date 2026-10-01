@@ -1,10 +1,3 @@
-//
-//  Feed.swift
-//  SuprSend
-//
-//  Created by Ram Suthar on 30/07/25.
-//
-
 import Foundation
 import Combine
 
@@ -15,11 +8,11 @@ private enum FeedConstants {
     static let store = IStore(storeId: "$suprsend_default_store", label: "")
     static let defaultApiHost = "https://inboxs.live"
     static let defaultSocketHost = "https://betainbox.suprsend.com"
+    static let socketAuthErrorMessage = "Authentication Error: wrong auth token"
 }
 
 /// A class responsible for handling inbox feed.
 public class Feed {
-    /// The configuration instance used to manage user data.
     private let config: SuprSendClient
     
     private let feedOptions: IFeedOptions
@@ -34,11 +27,8 @@ public class Feed {
 
     private var cancellables = Set<AnyCancellable>()
 
-    /// Monotonic counter bumped whenever in-flight fetches should be considered
-    /// stale (e.g. on store switch). Fetch checks this after each `await` and
-    /// bails if it changed.
     private var fetchGeneration = 0
-    
+
     public var data: IFeedData {
         let storeData = store.value
         
@@ -51,12 +41,9 @@ public class Feed {
         )
     }
     
-    /// Initializes a new `Feed` instance with the given configuration.
-    /// - Parameter config: The configuration instance to use.
     init(config: SuprSendClient, options: IFeedOptions? = nil) {
         self.config = config
         
-        // Set options
         var pageSize = FeedConstants.pageSize
         if let pageSizeOption = options?.pageSize,
            1...FeedConstants.maxPageSize ~= pageSizeOption {
@@ -69,11 +56,10 @@ public class Feed {
             host: options?.host
         )
         
-        // Create feed store
         self.store = .init(
             .init(
                 notifications: [],
-                store: options?.stores?.first ?? FeedConstants.store,
+                store: self.feedOptions.stores?.first ?? FeedConstants.store,
                 pageInfo: .init(
                     total: .zero,
                     hasMore: false,
@@ -213,9 +199,6 @@ extension Feed {
             store.send(storeData.with(apiStatus: .fetchingMore))
         } else {
             store.send(storeData.with(apiStatus: .loading))
-            // Fire badge-count refresh in parallel with the first-page request,
-            // mirroring the web SDK which doesn't await it. fetchCount updates
-            // the store independently when it resolves.
             Task { [weak self] in
                 _ = await self?.fetchCount()
             }
@@ -289,7 +272,7 @@ extension Feed {
                     notifications: notifications,
                     store: storeData.store,
                     pageInfo: pageInfo,
-                    meta: storeData.meta,
+                    meta: store.value.meta, // live meta, so a parallel fetchCount result is kept
                     apiStatus: .success,
                     isFirstFetch: false
                 )
@@ -354,7 +337,7 @@ extension Feed {
                 if (notification.n_id == notificationId) {
                     if (notification.seen_on == nil) {
                         return notification
-                            .with(seen_on: Date.now.timeIntervalSince1970)
+                            .with(seen_on: TimeInterval(Utils.shared.epochMs()))
                     } else {
                         alreadyUpdated = true
                     }
@@ -392,7 +375,7 @@ extension Feed {
             notifications: storeData.notifications.map({ notification in
                 if (notification.n_id == notificationId) {
                     if (notification.read_on == nil) {
-                        let now = Date.now.timeIntervalSince1970
+                        let now = TimeInterval(Utils.shared.epochMs())
                         var updated = notification.with(read_on: now)
                         if (notification.seen_on == nil) {
                             updated = updated.with(seen_on: now)
@@ -466,9 +449,9 @@ extension Feed {
             )
     }
     
+    // TODO: improve logic for already interacted cases
     public func markAsInteracted(notificationId: String) async -> APIResponse {
         let storeData = store.value
-        var alreadyUpdated = false
 
         store.send(storeData.with(
             notifications: storeData.notifications.map({ notification in
@@ -476,22 +459,16 @@ extension Feed {
                 if (notification.n_id == notificationId) {
                     if (notification.interacted_on == nil) {
                         newNotification = newNotification
-                            .with(interacted_on: Date.now.timeIntervalSince1970)
-                    } else {
-                        alreadyUpdated = true
+                            .with(interacted_on: TimeInterval(Utils.shared.epochMs()))
                     }
                     if (notification.read_on == nil) {
                         newNotification = newNotification
-                            .with(read_on: Date.now.timeIntervalSince1970)
+                            .with(read_on: TimeInterval(Utils.shared.epochMs()))
                     }
                 }
                 return newNotification
             })
         ))
-
-        if (alreadyUpdated) {
-            return .success()
-        }
 
         let url = getUrl(path: "notifications/\(notificationId)/interacted", qp: [
             "tenant_id": feedOptions.tenantId,
@@ -526,9 +503,11 @@ extension Feed {
         ))
         
         if (alreadyUpdated) {
+            // The row is already removed locally, so the UI still needs the update.
+            emitter.send(.storeUpdate(self.data))
             return .success()
         }
-        
+
         let url = getUrl(path: "notifications/\(notificationId)/archive", qp: [
             "tenant_id": feedOptions.tenantId,
             "distinct_id": config.distinctID,
@@ -555,7 +534,7 @@ extension Feed {
                 if (notificationIds.contains(notification.n_id)) {
                     if (notification.seen_on == nil) {
                         return notification
-                            .with(seen_on: Date.now.timeIntervalSince1970)
+                            .with(seen_on: TimeInterval(Utils.shared.epochMs()))
                     }
                 }
                 return notification
@@ -585,7 +564,6 @@ extension Feed {
         var meta = storeData.meta
         meta["badge"] = "0"
         
-        // optimistic update
         store.send(storeData.with(meta: meta))
         
         let url = getUrl(path: "reset_bell_count", qp: [
@@ -611,18 +589,19 @@ extension Feed {
         var meta = storeData.meta
         meta["badge"] = "0"
         
-        store.send(storeData.with(
-            notifications: storeData
+        // Chain both on one object so the badge reset is not dropped.
+        store.send(
+            storeData
                 .with(meta: meta)
-                .notifications.map({ notification in
+                .with(notifications: storeData.notifications.map({ notification in
                     if (notification.read_on == nil) {
                         return notification
-                            .with(read_on: Date.now.timeIntervalSince1970)
+                            .with(read_on: TimeInterval(Utils.shared.epochMs()))
                     }
                     return notification
-                })
-        ))
-        
+                }))
+        )
+
         let url = getUrl(path: "mark_all_read", qp: [
             "tenant_id": feedOptions.tenantId,
             "distinct_id": config.distinctID,
@@ -649,10 +628,7 @@ extension Feed {
         if (expiryTimerTask != nil) {
             return
         }
-        // Use Task.sleep rather than Timer.scheduledTimer because `fetch()` is
-        // async and frequently resumes on a cooperative-pool thread whose run
-        // loop isn't running, which would silently prevent the Timer from
-        // firing. Mirrors the keep-alive pattern in SocketClient.
+        // Task.sleep, not Timer: cooperative-pool threads have no run loop.
         expiryTimerTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 30_000_000_000)
@@ -670,9 +646,7 @@ extension Feed {
 
         let notifications = storeData.notifications.filter(
             { (notification: IRemoteNotification) in
-                // `expiry` is delivered by the backend in milliseconds since
-                // epoch (consistent with `created_on`), so convert to seconds
-                // before comparing with `Date.now`.
+                // expiry is in milliseconds, like created_on.
                 let expired = notification.expiry != nil
                 ? Date.now > Date(timeIntervalSince1970: notification.expiry! / 1000)
                 : false
@@ -771,7 +745,7 @@ extension Feed {
         }
         
         if !queryParams.isEmpty {
-            urlComponents.queryItems = queryParams
+            Utils.shared.setQueryItems(queryParams, on: &urlComponents)
         }
         return urlComponents.url?.absoluteString ?? urlPath
     }
@@ -822,12 +796,10 @@ extension Feed {
         return sameRead && sameTags && sameCategory && sameArchived
     }
     
-    
     private func orderNotificationsBasedOnPinFlag(
         newNotification: IRemoteNotification,
         existingNotifications: [IRemoteNotification]
     ) -> [IRemoteNotification] {
-        // if pinned notification add new notification append at start else at end of pinned notifications
         if (newNotification.is_pinned) {
             return [newNotification] + existingNotifications
         } else {
@@ -871,9 +843,9 @@ extension Feed {
         }
 
         socket = SocketClient(serverURL: host, headers: socketHeaders())
-        socket?.connect()
-
+        // Subscribe before connect; PassthroughSubject drops frames with no subscriber.
         initializeSocketEvents()
+        socket?.connect()
     }
 
     private func socketHeaders() -> [String: String] {
@@ -918,46 +890,60 @@ extension Feed {
             }
             .store(in: &cancellables)
 
+        socket?.reconnected
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] recovered in
+                guard !recovered else { return }
+                Task { [weak self] in await self?.resyncAfterUnrecoveredReconnect() }
+            }
+            .store(in: &cancellables)
+
         socket?.connectionLost
             .sink { [weak self] in
                 Task { [weak self] in await self?.handleSocketConnectionLost() }
             }
             .store(in: &cancellables)
+
+        socket?.connectError
+            .sink { [weak self] message in
+                Task { [weak self] in await self?.handleSocketConnectError(message: message) }
+            }
+            .store(in: &cancellables)
     }
 
-    /// Refreshes the user token if it has expired and pushes the new auth
-    /// headers into `SocketClient` so the next scheduled reconnect uses fresh
-    /// credentials. No-op if the token is still valid or no refresh callback
-    /// is configured.
+    private func handleSocketConnectError(message: String) async {
+        guard message == FeedConstants.socketAuthErrorMessage,
+              config.authenticateOptions?.refreshUserToken != nil,
+              config.userToken != nil else { return }
+
+        await config.client().refreshExpiringUserToken()
+
+        guard let socket,
+              let latestUserToken = config.userToken,
+              socket.headers["x-ss-signature"] != latestUserToken else { return }
+
+        socket.updateHeaders(socketHeaders())
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        guard self.socket === socket else { return }
+        socket.connect()
+    }
+
+    // The server didn't replay events missed while offline, so the loaded pages may be stale.
+    private func resyncAfterUnrecoveredReconnect() async {
+        guard socket != nil, !store.value.isFirstFetch else { return }
+
+        fetchGeneration &+= 1
+        resetState(to: store.value.store, preservesMeta: true)
+        _ = await fetch()
+    }
+
     private func handleSocketConnectionLost() async {
-        guard let userToken = config.userToken,
-              let refreshUserToken = config.authenticateOptions?.refreshUserToken else {
-            return
-        }
+        // connectionLost can arrive after remove(); a dead feed must not touch the session.
+        guard socket != nil else { return }
 
-        let jwtPayload = try? Utils.shared.decode(jwtToken: userToken)
-        let expiresOn = jwtPayload?[Constants.expiryKeyJWT] as? Double ?? .zero
-        let hasExpired = expiresOn <= Date.now.timeIntervalSince1970
+        await config.client().refreshExpiringUserToken()
 
-        guard hasExpired else { return }
-
-        let newToken: String?
-        do {
-            newToken = try await refreshUserToken(userToken, jwtPayload ?? .init())
-        } catch {
-            logger.warning("[SuprSend]: Couldn't refresh userToken for socket reconnect")
-            return
-        }
-
-        guard let newToken,
-              let distinctID = config.distinctID else { return }
-
-        _ = await config.identify(
-            distinctID: distinctID,
-            userToken: newToken,
-            options: config.authenticateOptions
-        )
-
+        // Always re-sync: an API call may have refreshed the token since the socket connected.
         socket?.updateHeaders(socketHeaders())
     }
 
@@ -966,7 +952,6 @@ extension Feed {
         var meta = storeData.meta
         meta["badge"] = "0"
         
-        // optimistic update
         store.send(storeData.with(meta: meta))
         
         emitter.send(.storeUpdate(self.data))
@@ -1009,7 +994,6 @@ extension Feed {
             }
         }
         
-        // update overall badge count as well if it belongs any of store current store
         let badge = newMetaData["badge"]
         let plusBadge = String((Int(badge ?? "0") ?? 0) + 1)
         newMetaData["badge"] = emitNewNotificationEvent ? plusBadge : badge
@@ -1022,7 +1006,6 @@ extension Feed {
         emitter.send(.storeUpdate(self.data))
     }
 
-    
     private func handleNotificationUpdateSocketEvent(data: [String: AnyDecodable]?) async {
         guard let nid = data?["n_id"],
               case .string(let notificationId) = nid else { return }
@@ -1047,7 +1030,6 @@ extension Feed {
         
         if (notificationBelongsToStore) {
             if (!notificationPresent) {
-                // Insert new notification
                 store.send(
                     store.value.with(
                         notifications: orderNotificationsBasedOnPinFlag(
@@ -1057,7 +1039,6 @@ extension Feed {
                     )
                 )
             } else {
-                // Update existing notification data
                 store.send(
                     store.value.with(
                         notifications: storeData.notifications.compactMap {
@@ -1066,7 +1047,6 @@ extension Feed {
                 )
             }
         } else {
-            // Filter out notification
             store.send(
                 store.value.with(
                     notifications: storeData.notifications.filter {
@@ -1077,7 +1057,6 @@ extension Feed {
         
         emitter.send(.storeUpdate(self.data))
     }
-    
     
     private func handleBulkNotificationUpdateSocketEvent(data: [String: AnyDecodable]?) async {
         guard let data else {
@@ -1103,7 +1082,7 @@ extension Feed {
             let notifications = storeData.notifications.map { notification in
                 if (notification.read_on == nil) {
                     notification
-                        .with(read_on: Date.now.timeIntervalSince1970)
+                        .with(read_on: TimeInterval(Utils.shared.epochMs()))
                 } else {
                     notification
                 }
@@ -1130,7 +1109,7 @@ extension Feed {
                     .notifications.map({ notification in
                         if (ids.contains(notification.n_id)) {
                             notification
-                                .with(seen_on: Date.now.timeIntervalSince1970)
+                                .with(seen_on: TimeInterval(Utils.shared.epochMs()))
                         } else {
                             notification
                         }

@@ -1,10 +1,3 @@
-//
-//  SuprSendTests.swift
-//  SuprSendTests
-//
-//  Created by Ram Suthar on 24/09/24.
-//
-
 import Testing
 import Foundation
 @testable import SuprSend
@@ -44,6 +37,5 @@ struct SuprSendTests {
         let userEmail = await client.user.addEmail("hello@example.com")
         #expect(userEmail.error?.message == nil)
     }
-
 
 }

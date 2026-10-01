@@ -1,26 +1,14 @@
-//
-//  SocketClient.swift
-//  SuprSend
-//
-//  Created by Ram Suthar on 31/08/25.
-//
-
 import Foundation
 import Network
 import Combine
 
-/// Socket Connection Manager
 class SocketClient: NSObject, ObservableObject {
     
     struct SocketMessage: Decodable {
         let event: EventType
         let data: [String: AnyDecodable]?
-        
-        /// Server-emitted socket events. `.unknown(String)` captures any event
-        /// the SDK doesn't yet model (e.g. `joined_room`) so they don't break
-        /// frame decoding; consumers can choose to ignore them. Mirrors the
-        /// "silently no-op for unhandled events" behavior of the web SDK's
-        /// mitt-based emitter.
+        let offset: String?
+
         enum EventType: Equatable {
             case notificationUpdate
             case newNotification
@@ -51,14 +39,20 @@ class SocketClient: NSObject, ObservableObject {
                 !string.isEmpty {
                 self.event = EventType(rawValue: string)
 
-                // socket.io frames may carry trailing metadata (e.g. a Redis
-                // stream ID) after the payload, so accept any frame with >=2
-                // elements and read the payload at index 1.
+                // Frames may carry trailing metadata after the payload; the payload is index 1.
                 if parts.count >= 2,
                    case .object(let dictionary) = parts[1] {
                     self.data = dictionary
                 } else {
                     self.data = nil
+                }
+
+                // With connection state recovery the server appends the packet offset as the last argument.
+                if parts.count >= 2,
+                   case .some(.string(let offset)) = parts.last {
+                    self.offset = offset
+                } else {
+                    self.offset = nil
                 }
             } else {
                 throw DecodingError
@@ -67,42 +61,43 @@ class SocketClient: NSObject, ObservableObject {
         }
     }
     
-    private var webSocketTask: URLSessionWebSocketTask?
+    private(set) var webSocketTask: URLSessionWebSocketTask?
     private var urlSession: URLSession?
 
-    // Keep-alive configuration
     private var heartbeatTask: Task<Void, Never>?
     private var reconnectionTask: Task<Void, Never>?
 
-    // Engine.IO v4 is server-driven: the server sends "2" pings, the client
-    // replies "3". The interval/timeout come from the `0{...}` handshake frame
-    // (see `handleHandshake`); these are the engine.io defaults used until the
-    // real values arrive. Matches suprsend-web-sdk, which delegates heartbeat
-    // to socket.io-client.
+    var isReconnecting: Bool { reconnectionTask != nil }
+
+    // Engine.IO v4 is server-driven: server sends "2", client replies "3".
     private var serverPingInterval: TimeInterval = 25.0
     private var serverPingTimeout: TimeInterval = 20.0
     private let heartbeatCheckInterval: UInt64 = 5_000_000_000
 
-    // Reconnect backoff matches suprsend-web-sdk (socket.io-client defaults).
     private let reconnectionDelay: TimeInterval = 1.0
     private let reconnectionDelayMax: TimeInterval = 10.0
 
-    // Connection state
     private var lastPongReceived = Date()
     private var reconnectionAttempts = 0
     private let maxReconnectionAttempts = 25
     
-    private var userInitiatedDisconnect: Bool = false
-    
+    // Mirrors socket.io-client `socket.active`: false once the client or server ends the session.
+    private(set) var active = false
+
+    // Connection state recovery, like socket.io-client `_pid` / `_lastOffset`: sent back on reconnect so the server replays missed events.
+    private(set) var pid: String?
+    private(set) var lastOffset: String?
+    private var hasConnected = false
+
     private var serverURL: String
-    private var headers: [String: String]
-    
+    private(set) var headers: [String: String]
+
     @Published var connectionStatus: ConnectionStatus = .disconnected
     let receivedMessage: PassthroughSubject<SocketMessage, Never> = .init()
-    /// Fires whenever a connection is lost or closed unexpectedly, before a
-    /// reconnect is scheduled. Lets Feed refresh auth headers if the cause was
-    /// JWT expiry, so the upcoming reconnect uses a fresh token.
+    /// Emits on every namespace reconnect after the first; `true` when the server recovered the previous session.
+    let reconnected: PassthroughSubject<Bool, Never> = .init()
     let connectionLost: PassthroughSubject<Void, Never> = .init()
+    let connectError: PassthroughSubject<String, Never> = .init()
     @Published var error: String?
     
     enum ConnectionStatus {
@@ -130,7 +125,6 @@ class SocketClient: NSObject, ObservableObject {
         urlSession = URLSession(configuration: config, delegate: self, delegateQueue: OperationQueue())
     }
     
-    // Connect to WebSocket
     func connect() {
         guard let url = socketIOURL(from: serverURL) else {
             logger.error("Invalid URL: \(serverURL)")
@@ -142,31 +136,20 @@ class SocketClient: NSObject, ObservableObject {
             return
         }
 
-        userInitiatedDisconnect = false
+        active = true
         connectionStatus = .connecting
 
         let request = URLRequest(url: url)
 
-        // Tear down any previous task before creating a new one. On heartbeat-
-        // timeout-driven reconnects the underlying TCP connection is often
-        // still alive on the server, so reassigning `webSocketTask` without
-        // cancelling first leaves the old room joined and produces duplicate
-        // `joined_room` / `new_notification` events. Stale delegate callbacks
-        // from this cancellation are ignored via identity checks below.
+        // Cancel the previous task first or its room stays joined and events duplicate.
         webSocketTask?.cancel(with: .goingAway, reason: nil)
 
         webSocketTask = urlSession?.webSocketTask(with: request)
         webSocketTask?.resume()
 
-        // Start listening for messages
         listen()
     }
 
-    /// Builds the socket.io v4 websocket-transport handshake URL on top of the
-    /// configured base host. The Suprsend feed server speaks engine.io/socket.io
-    /// v4, so a bare `wss://host/` connection fails the upgrade — we must hit
-    /// `/socket.io/?EIO=4&transport=websocket`. Auth is sent over the wire in
-    /// the `40` CONNECT packet (see `sendAuthMessage`), not as HTTP headers.
     private func socketIOURL(from base: String) -> URL? {
         guard var components = URLComponents(string: base) else { return nil }
         var path = components.path
@@ -183,31 +166,29 @@ class SocketClient: NSObject, ObservableObject {
         return components.url
     }
     
-    /// Replaces the auth headers used on subsequent reconnect attempts.
-    /// Caller should typically invoke this in response to `connectionLost`
-    /// after refreshing an expired user token.
     func updateHeaders(_ headers: [String: String]) {
         self.headers = headers
     }
 
-    // Disconnect from WebSocket
     func disconnect() {
-        userInitiatedDisconnect = true
+        active = false
         logger.info("Disconnecting socket")
         stopKeepAlive()
         webSocketTask?.cancel(with: .goingAway, reason: nil)
         webSocketTask = nil
+        // URLSession retains its delegate until invalidated; without this the client is never freed.
+        urlSession?.invalidateAndCancel()
+        urlSession = nil
         connectionStatus = .disconnected
         reconnectionAttempts = 0
+        pid = nil
+        lastOffset = nil
+        hasConnected = false
     }
     
     private func startKeepAlive() {
         lastPongReceived = Date()
 
-        // Engine.IO v4 is server-driven, so this is only a dead-connection
-        // watchdog: every `heartbeatCheckInterval` we verify that a server
-        // ping (or any traffic) has arrived within
-        // `serverPingInterval + serverPingTimeout`. No client-initiated pings.
         heartbeatTask = Task {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: heartbeatCheckInterval)
@@ -229,9 +210,9 @@ class SocketClient: NSObject, ObservableObject {
         reconnectionTask = nil
     }
     
-    // Send text message
     func sendMessage(_ text: String) {
-        guard connectionStatus == .connected else {
+        // Not gated on .connected: the "40" connect frame and pongs go out before the server accepts.
+        guard webSocketTask != nil else {
             logger.error("Cannot send message - not connected")
             return
         }
@@ -248,7 +229,6 @@ class SocketClient: NSObject, ObservableObject {
         }
     }
     
-    // Send data message
     func sendData(_ data: Data) {
         let message = URLSessionWebSocketTask.Message.data(data)
         webSocketTask?.send(message) { [weak self] error in
@@ -260,13 +240,8 @@ class SocketClient: NSObject, ObservableObject {
         }
     }
     
-    // Listen for incoming messages
     private func listen() {
-        // Capture the task we're listening on so we can detect (and ignore)
-        // callbacks for a task we've already replaced — otherwise the in-flight
-        // receive on the previous task, completing with an error after we
-        // cancel it in `connect()`, would trigger `handleConnectionLost` and
-        // clobber the new socket's status / keep-alive state.
+        // Ignore callbacks from a task we've already replaced.
         let task = webSocketTask
         task?.receive { [weak self] result in
             guard let self else { return }
@@ -285,38 +260,61 @@ class SocketClient: NSObject, ObservableObject {
                     break
                 }
 
-                // Continue listening
                 self.listen()
 
             case .failure(let error):
                 self.connectionStatus = .error
                 self.error = "Receive failed: \(error.localizedDescription)"
                 logger.error("Receive failed: \(error.localizedDescription)")
-                if !self.userInitiatedDisconnect {
+                if self.active {
                     self.handleConnectionLost()
                 }
             }
         }
     }
     
-    
-    private func handleTextMessage(_ text: String) {
+    func handleTextMessage(_ text: String) {
         logger.info("[SuprSendSocket] RX: \(text)")
-        if text.starts(with: "3"){
+        // Two-character Socket.IO packets must be matched before the Engine.IO "0"/"2"/"3" checks.
+        if text.starts(with: "40") {
+            handleNamespaceConnect(jsonString: String(text.dropFirst(2)))
+        } else if text.starts(with: "41") {
+            handleServerRejection(message: "io server disconnect")
+        } else if text.starts(with: "44") {
+            handleServerRejection(message: connectErrorMessage(from: String(text.dropFirst(2))))
+        } else if text.starts(with: "42") {
+            let message = text.suffix(from: text.index(text.startIndex, offsetBy: 2))
+            parseSocketMessage(jsonString: String(message))
+        } else if text.starts(with: "3") {
             lastPongReceived = Date()
         } else if text.starts(with: "0") {
-            // engine.io handshake — `0{"sid":...,"pingInterval":25000,"pingTimeout":20000}`.
-            // The web-sdk lets socket.io-client read these and so do we; treat
-            // anything we can't parse as the engine.io defaults already in place.
             handleHandshake(jsonString: String(text.dropFirst()))
             sendAuthMessage()
         } else if text.starts(with: "2") {
             lastPongReceived = Date()
             sendMessage("3")
-        } else if text.starts(with: "42") {
-            let message = text.suffix(from: text.index(text.startIndex, offsetBy: 2))
-            parseSocketMessage(jsonString: String(message))
         }
+    }
+
+    private func connectErrorMessage(from jsonString: String) -> String {
+        guard let data = jsonString.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let message = json["message"] as? String else {
+            return "connect_error"
+        }
+        return message
+    }
+
+    // Like socket.io-client `destroy()`: a server-ended session is not retried.
+    private func handleServerRejection(message: String) {
+        logger.error("Socket rejected by server: \(message)")
+        active = false
+        stopKeepAlive()
+        webSocketTask?.cancel(with: .goingAway, reason: nil)
+        webSocketTask = nil
+        connectionStatus = .error
+        error = message
+        connectError.send(message)
     }
 
     private func handleHandshake(jsonString: String) {
@@ -333,29 +331,63 @@ class SocketClient: NSObject, ObservableObject {
         logger.info("Engine.IO handshake: pingInterval=\(serverPingInterval)s pingTimeout=\(serverPingTimeout)s")
     }
     
+    private func handleNamespaceConnect(jsonString: String) {
+        let json = jsonString.data(using: .utf8)
+            .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+        let newPid = json?["pid"] as? String
+        let recovered = newPid != nil && newPid == pid
+
+        pid = newPid
+        if !recovered {
+            lastOffset = nil
+        }
+
+        logger.info("Socket.IO namespace connected (recovered: \(recovered))")
+        connectionStatus = .connected
+        reconnectionAttempts = 0
+
+        if hasConnected {
+            reconnected.send(recovered)
+        }
+        hasConnected = true
+    }
+
     private func parseSocketMessage(jsonString: String) {
         guard let data = jsonString.data(using: .utf8) else {
             return
         }
-        
+
         do {
             let message = try JSONDecoder()
                 .decode(SocketMessage.self, from: data)
-            
+
+            if pid != nil, let offset = message.offset {
+                lastOffset = offset
+            }
+
             self.receivedMessage.send(message)
         } catch {
             logger.warning("Socket message decoding error: \(error)")
         }
     }
-    
-    private func sendAuthMessage() {
+
+    func connectPayload() -> String {
+        var auth = headers
+        if let pid {
+            auth["pid"] = pid
+            auth["offset"] = lastOffset
+        }
         do {
-            let auth = try JSONEncoder().encode(headers)
-            let message = String(data: auth, encoding: .utf8) ?? ""
-            sendMessage("40" + message)
+            let data = try JSONEncoder().encode(auth)
+            return "40" + (String(data: data, encoding: .utf8) ?? "")
         } catch {
             logger.warning("Auth message encoding error: \(error)")
+            return "40"
         }
+    }
+
+    private func sendAuthMessage() {
+        sendMessage(connectPayload())
     }
     
     private func handleDataMessage(_ data: Data) {
@@ -364,10 +396,6 @@ class SocketClient: NSObject, ObservableObject {
     
     private func checkHeartbeat() {
         let timeSinceLastPong = Date().timeIntervalSince(lastPongReceived)
-        // Server pings every `pingInterval` and considers itself unreachable
-        // after `pingTimeout` past that; mirroring socket.io-client, we treat
-        // the connection as dead once we've gone the full window without any
-        // server frame.
         let threshold = serverPingInterval + serverPingTimeout
         if timeSinceLastPong > threshold {
             logger.warning("Heartbeat timeout - no server frame for \(timeSinceLastPong)s (threshold \(threshold)s)")
@@ -375,12 +403,9 @@ class SocketClient: NSObject, ObservableObject {
         }
     }
 
-
     private func handleConnectionLost() {
-        // Bail when the user explicitly disconnected, or when a reconnect is
-        // already in flight — prevents double-scheduling when both the receive
-        // failure path and the close-delegate path race here.
-        if userInitiatedDisconnect { return }
+        guard active else { return }
+        // Receive-failure and close paths race here; schedule once.
         if reconnectionTask != nil { return }
 
         logger.error("Connection lost - attempting reconnection")
@@ -399,18 +424,12 @@ class SocketClient: NSObject, ObservableObject {
 
         reconnectionAttempts += 1
 
-        // Exponential backoff capped at `reconnectionDelayMax`. Matches
-        // socket.io-client's defaults used by suprsend-web-sdk
-        // (`reconnectionDelay: 1000`, `reconnectionDelayMax: 10000`).
         let backoff = reconnectionDelay * pow(2.0, Double(reconnectionAttempts - 1))
         let delay = min(backoff, reconnectionDelayMax)
 
         logger.warning("Reconnecting in \(delay)s (attempt \(reconnectionAttempts)/\(maxReconnectionAttempts))")
 
-        // Use Task.sleep rather than Timer.scheduledTimer because this is
-        // invoked from the URLSession delegate queue and from `listen()`'s
-        // receive completion handler — neither has a guaranteed running run
-        // loop, which would silently prevent the Timer from firing.
+        // Task.sleep, not Timer: the URLSession delegate queue has no run loop.
         reconnectionTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             guard !Task.isCancelled else { return }
@@ -422,21 +441,17 @@ class SocketClient: NSObject, ObservableObject {
     }
 }
 
-
 // MARK: - URLSessionWebSocketDelegate
 extension SocketClient: URLSessionWebSocketDelegate {
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
-        // Ignore callbacks for a task we've already replaced — a stale `open`
-        // arriving after we reconnected would otherwise mark the new socket
-        // as connected and reset keep-alive state under it.
+        // Ignore callbacks from a task we've already replaced.
         guard webSocketTask === self.webSocketTask else {
             logger.info("Ignoring didOpen for stale webSocketTask")
             return
         }
 
+        // Stays .connecting until the server accepts the namespace with "40".
         logger.info("WebSocket connected")
-        connectionStatus = .connected
-        reconnectionAttempts = 0
         lastPongReceived = Date()
 
         startKeepAlive()
@@ -449,8 +464,7 @@ extension SocketClient: URLSessionWebSocketDelegate {
             logger.info("Close reason: \(reasonString)")
         }
 
-        // Ignore close callbacks for tasks we've already replaced (typically
-        // the previous task we explicitly cancelled in `connect()`).
+        // Ignore callbacks from a task we've already replaced.
         guard webSocketTask === self.webSocketTask else {
             logger.info("Ignoring didClose for stale webSocketTask")
             return
@@ -459,10 +473,8 @@ extension SocketClient: URLSessionWebSocketDelegate {
         connectionStatus = .disconnected
         stopKeepAlive()
 
-        // Auto-reconnect unless explicitly closed. Guard against double-
-        // scheduling when both this path and `listen()`'s receive-failure path
-        // race here for the same disconnect.
-        if closeCode != .goingAway, reconnectionTask == nil {
+        // Receive-failure and close paths race here; schedule once.
+        if active, reconnectionTask == nil {
             connectionLost.send(())
             scheduleReconnection()
         }

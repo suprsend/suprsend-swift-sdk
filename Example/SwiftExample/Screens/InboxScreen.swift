@@ -37,7 +37,6 @@ final class InboxViewModel: ObservableObject {
         IFeedOptions(tenantId: nil, pageSize: 10, stores: stores, host: feedHost)
     }
 
-    /// Nil when neither host is configured, so the SDK's own defaults apply.
     private static var feedHost: FeedHost? {
         guard SuprSendConstants.feedAPIHost != nil || SuprSendConstants.feedSocketHost != nil else {
             return nil
@@ -378,8 +377,7 @@ private struct NotificationCard: View {
 }
 
 private func formatRelative(from timestamp: TimeInterval) -> String {
-    let seconds = timestamp > 1_000_000_000_000 ? timestamp / 1000 : timestamp
-    let date = Date(timeIntervalSince1970: seconds)
+    let date = Date(timeIntervalSince1970: timestamp / 1000)
     let diff = max(1, Int(Date().timeIntervalSince(date)))
     if diff < 60 { return "\(diff)s ago" }
     let m = diff / 60
