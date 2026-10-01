@@ -21,7 +21,7 @@ enum Constants {
 
     static let sdkName = "suprsend-swift-sdk"
 
-    static let sdkVersion = "2.2.0"
+    static let sdkVersion = "2.1.0"
 
     static let expiryKeyJWT = "exp"
 
