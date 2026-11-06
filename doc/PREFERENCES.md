@@ -311,7 +311,7 @@ await SuprSend.shared.user.preferences.getPreferences(args: Preferences.Args(ten
 Calling this method will opt-in/opt-out users from that category-level channel. When the category's channel checkbox is editable and the user clicks on the checkbox you can call this method.
 
 ```swift
-await SuprSend.shared.user.preferences.updateChannelPreferenceInCategory(
+SuprSend.shared.user.preferences.updateChannelPreferenceInCategory(
   channel: "channel",
   preference: PreferenceOptions,
   category: "category"
@@ -323,7 +323,7 @@ enum PreferenceOptions: String, Codable {
 }
 ```
 
-**Returns:** `async -> PreferenceAPIResponse`
+**Returns:** `PreferenceAPIResponse`
 
 ![Update channel preference in category](https://mintcdn.com/suprsend/ysJyO3LOXwZ5L098/images/docs/mobile-update-channel-preference-in-category.png?fit=max&auto=format&n=ysJyO3LOXwZ5L098&q=85&s=29a092367c0a467a152bc6fd6bb0421e)
 
@@ -332,7 +332,7 @@ enum PreferenceOptions: String, Codable {
 This is category level preference changing method. Calling this method will opt-in/opt-out user from that category. When the category is editable and the switch is toggled you can call this method.
 
 ```swift
-await SuprSend.shared.user.preferences.updateCategoryPreference(category: "category_value", preference: PreferenceOptions)
+SuprSend.shared.user.preferences.updateCategoryPreference(category: "category_value", preference: PreferenceOptions)
 
 enum PreferenceOptions: String, Codable {
   case optIn = "opt_in"
@@ -340,14 +340,14 @@ enum PreferenceOptions: String, Codable {
 }
 ```
 
-**Returns:** `async -> PreferenceAPIResponse`
+**Returns:** `PreferenceAPIResponse`
 
 ### Update overall channel preference
 
 This method updated the channel-level preference of the user.
 
 ```swift
-await SuprSend.shared.user.preferences.updateOverallChannelPreference(
+SuprSend.shared.user.preferences.updateOverallChannelPreference(
   channel: "channel",
   preference: ChannelLevelPreferenceOptions
 )
@@ -358,13 +358,13 @@ enum ChannelLevelPreferenceOptions: String, Codable {
 }
 ```
 
-**Returns:** `async -> PreferenceAPIResponse`
+**Returns:** `PreferenceAPIResponse`
 
 ![Update overall channel preference](https://mintcdn.com/suprsend/ysJyO3LOXwZ5L098/images/docs/mobile-overall-update-channels.png?fit=max&auto=format&n=ysJyO3LOXwZ5L098&q=85&s=43fae7ed01bbb0ddde7ca1ae7fe425f4)
 
 ### Update digest schedule in category
 
-Changes how often the user receives a digest for a category. Pass the `id` from the category's `digestSchedule` and only the fields you want to change; a field can be changed when its `editPolicy` is `editable`. Unlike the preference toggles above, this call is not debounced: the request is sent immediately and the returned response is the API response. On success `.preferencesUpdated` fires with refreshed data, on failure `.preferencesError` fires.
+Changes how often the user receives a digest for a category. Pass the `id` from the category's `digestSchedule` and only the fields you want to change; a field can be changed when its `editPolicy` is `editable`. Unlike the preference toggles above, this call is not debounced: the request is sent immediately and the method waits for it. On success the returned response's `body` is the server's updated `Category`. That category is also merged into the local preference data, and `.preferencesUpdated` fires with the full data. On failure the returned response carries the error and `.preferencesError` fires.
 
 ```swift
 await SuprSend.shared.user.preferences.updateDigestScheduleInCategory(
@@ -377,7 +377,7 @@ await SuprSend.shared.user.preferences.updateDigestScheduleInCategory(
 )
 ```
 
-**Returns:** `async -> PreferenceAPIResponse`
+**Returns:** `async -> CategoryAPIResponse`
 
 ### Update properties in category
 
@@ -392,7 +392,7 @@ await SuprSend.shared.user.preferences.updatePropertiesInCategory(
 )
 ```
 
-**Returns:** `async -> PreferenceAPIResponse`
+**Returns:** `async -> CategoryAPIResponse`
 
 ### Event listeners
 

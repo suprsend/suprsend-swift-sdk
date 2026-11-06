@@ -93,6 +93,31 @@ struct PreferencesTests {
         #expect(properties.error?.message == "Category not found")
     }
 
+    @Test func emptyCategoryOrChannelIsRejectedBeforeAnyLookup() async throws {
+        let client = try await seededClient()
+        let preferences = client.user.preferences
+
+        let category = preferences.updateCategoryPreference(category: "", preference: .optOut)
+        let channelInCategory = preferences.updateChannelPreferenceInCategory(
+            channel: "", preference: .optOut, category: "marketing")
+        let categoryOfChannel = preferences.updateChannelPreferenceInCategory(
+            channel: "email", preference: .optOut, category: "")
+        let digest = await preferences.updateDigestScheduleInCategory(
+            category: "", digestSchedule: .init(id: "daily"))
+        let properties = await preferences.updatePropertiesInCategory(category: "", properties: [])
+        let overall = preferences.updateOverallChannelPreference(channel: "", preference: .all)
+        let fetched = await preferences.getCategory(category: "")
+
+        #expect(category.error?.message == "Category parameter is missing")
+        #expect(channelInCategory.error?.message == "Channel parameter is missing")
+        #expect(categoryOfChannel.error?.message == "Category parameter is missing")
+        #expect(digest.error?.message == "Category parameter is missing")
+        #expect(properties.error?.message == "Category parameter is missing")
+        #expect(overall.error?.message == "Channel parameter is missing")
+        #expect(fetched.error?.message == "Category parameter is missing")
+        #expect(fetched.error?.type == .validation)
+    }
+
     @Test func categoryUpdatesSendImmediatelyAndEmitErrors() async throws {
         let client = try await seededClient()
         let errors = Counter()
@@ -133,6 +158,42 @@ struct PreferencesTests {
         #expect(category.category == "marketing")
         #expect(category.digestSchedule == nil)
         #expect(category.properties == nil)
+    }
+
+    @Test func unknownPreferenceValuesDecodeAsOptOut() throws {
+        let category = try decodeCategory(
+            #"{"name":"Marketing","category":"marketing","preference":"something_new","is_editable":true,"channels":[{"channel":"email","preference":"also_new","is_editable":true},{"channel":"sms","preference":"OPT_IN","is_editable":true}]}"#
+        )
+
+        #expect(category.preference == .optOut)
+        #expect(category.channels?.first?.preference == .optOut)
+        #expect(category.channels?.last?.preference == .optIn)
+    }
+
+    @Test func categoryResponseKeepsServerError() throws {
+        let response = try JSONDecoder().decode(
+            CategoryAPIResponse.self,
+            from: Data(#"{"error":{"type":"VALIDATION_ERROR","message":"bad tenant"}}"#.utf8))
+
+        #expect(response.body == nil)
+        #expect(response.error?.type == .validation)
+        #expect(response.error?.message == "bad tenant")
+    }
+
+    @Test func mergeUpdatesInPlaceAndKeepsOmittedFields() throws {
+        let local = try decodeCategory(Self.richCategoryJSON)
+        let reply = try decodeCategory(
+            #"{"name":"Marketing v2","category":"marketing","preference":"opt_out","is_editable":false}"#
+        )
+
+        local.merge(from: reply)
+
+        #expect(local.name == "Marketing v2")
+        #expect(local.preference == .optOut)
+        #expect(local.isEditable == false)
+        #expect(local.digestSchedule?.id == "weekly")
+        #expect(local.properties?.key == "region")
+        #expect(local.channels?.isEmpty == true)
     }
 
     @Test func categoryUpdatePayloadsEncodeServerKeys() throws {

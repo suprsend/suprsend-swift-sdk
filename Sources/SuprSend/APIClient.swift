@@ -181,11 +181,18 @@ class APIClient {
             }
 
             // Server doesn't echo HTTP status in the body; take it from the response.
+            let statusCode = httpResponse?.statusCode ?? 0
+            let isSuccess = (200..<300).contains(statusCode)
+            // Callers check `error`, so a failed status must always carry one.
+            let error = decoded.error ?? (isSuccess ? nil : ResponseError(
+                type: .unknown,
+                message: HTTPURLResponse.localizedString(forStatusCode: statusCode)
+            ))
             return R.init(
-                status: (200..<300).contains(httpResponse?.statusCode ?? 0) ? .success : .error,
+                status: isSuccess ? .success : .error,
                 statusCode: httpResponse?.statusCode,
                 body: decoded.body,
-                error: decoded.error
+                error: error
             )
         } catch {
             logger.error("SuprSend: \(methodString) \(urlString) \(httpResponse?.statusCode ?? 0) \(String(data: data, encoding: .utf8) ?? "") error: \(error.localizedDescription)")

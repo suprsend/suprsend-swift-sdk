@@ -6,6 +6,12 @@ public enum PreferenceOptions: String, Codable {
 
     /// Option to opt out for a preference
     case optOut = "opt_out"
+
+    public init(from decoder: Decoder) throws {
+        let rawString = try decoder.singleValueContainer().decode(String.self)
+        // An unknown value must not fail the whole preferences response; Android maps it to opt-out too.
+        self = PreferenceOptions(rawValue: rawString.lowercased()) ?? .optOut
+    }
 }
 
 public enum ChannelLevelPreferenceOptions: String, Codable {
@@ -45,28 +51,28 @@ public class CategoryChannel: Codable {
 
 public class Category: Codable {
     /// The name of the category
-    public let name: String
+    public internal(set) var name: String
 
     /// The category itself
     public let category: String
 
     /// A brief description of the category (optional)
-    public let description: String?
+    public internal(set) var description: String?
 
     /// The preference for this category
     public var preference: PreferenceOptions
-    
+
     /// Whether this category is editable or not
-    public let isEditable: Bool
+    public internal(set) var isEditable: Bool
 
     /// An array of subcategories (optional)
-    public let channels: [CategoryChannel]?
+    public internal(set) var channels: [CategoryChannel]?
 
     /// Digest schedule configured for this category (optional)
-    public let digestSchedule: CategoryDigestSchedule?
+    public internal(set) var digestSchedule: CategoryDigestSchedule?
 
     /// Custom property configured for this category (optional)
-    public let properties: CategoryProperties?
+    public internal(set) var properties: CategoryProperties?
 
     enum CodingKeys: String, CodingKey {
         case name
@@ -90,6 +96,17 @@ public class Category: Codable {
         // Lenient: an unexpected shape for these newer fields must not fail the whole preferences response.
         digestSchedule = try? container.decodeIfPresent(CategoryDigestSchedule.self, forKey: .digestSchedule)
         properties = try? container.decodeIfPresent(CategoryProperties.self, forKey: .properties)
+    }
+
+    func merge(from other: Category) {
+        name = other.name
+        preference = other.preference
+        isEditable = other.isEditable
+        // Like the web SDK's Object.assign: a field the reply omits keeps its current value.
+        description = other.description ?? description
+        channels = other.channels ?? channels
+        digestSchedule = other.digestSchedule ?? digestSchedule
+        properties = other.properties ?? properties
     }
 }
 
@@ -293,6 +310,109 @@ public struct PreferenceAPIResponse: Response {
         self.error = try container.decodeIfPresent(ResponseError.self, forKey: .error)
         
         self.body = try PreferenceData(from: decoder)
+    }
+}
+
+/// The API response for a single preference category.
+public struct CategoryAPIResponse: Response {
+    /// The status of the API response
+    public let status: ResponseStatus
+
+    /// The HTTP status code of the API response (optional)
+    public let statusCode: StatusCode?
+
+    /// The category returned by the server (optional)
+    public let body: Category?
+
+    /// An error message if any (optional)
+    public let error: ResponseError?
+
+    /// Initializes a `CategoryAPIResponse` instance
+    ///
+    /// - Parameters:
+    ///   - status: The status of the API response.
+    ///   - statusCode: The HTTP status code of the API response (optional).
+    ///   - body: The category returned by the server (optional).
+    ///   - error: An error message if any (optional).
+    public init(
+        status: ResponseStatus, statusCode: StatusCode?, body: Category?,
+        error: ResponseError?
+    ) {
+        self.status = status
+        self.statusCode = statusCode
+        self.body = body
+        self.error = error
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.status = try container.decodeIfPresent(ResponseStatus.self, forKey: .status) ?? .success
+        self.statusCode = try container.decodeIfPresent(StatusCode.self, forKey: .statusCode)
+        self.error = try container.decodeIfPresent(ResponseError.self, forKey: .error)
+        // Error replies aren't category-shaped and must still surface their `error`.
+        self.body = try? Category(from: decoder)
+    }
+}
+
+/// Pagination details returned with a page of categories.
+public struct CategoriesMeta: Codable {
+    /// Total number of categories (optional)
+    public let count: Int?
+
+    /// Maximum number of categories in this page (optional)
+    public let limit: Int?
+
+    /// Offset of the first category in this page (optional)
+    public let offset: Int?
+}
+
+/// A page of preference categories.
+public struct CategoriesData: Codable {
+    /// Pagination details (optional)
+    public let meta: CategoriesMeta?
+
+    /// The categories in this page
+    public let results: [Category]
+}
+
+/// The API response for a page of preference categories.
+public struct CategoriesAPIResponse: Response {
+    /// The status of the API response
+    public let status: ResponseStatus
+
+    /// The HTTP status code of the API response (optional)
+    public let statusCode: StatusCode?
+
+    /// The page of categories returned by the server (optional)
+    public let body: CategoriesData?
+
+    /// An error message if any (optional)
+    public let error: ResponseError?
+
+    /// Initializes a `CategoriesAPIResponse` instance
+    ///
+    /// - Parameters:
+    ///   - status: The status of the API response.
+    ///   - statusCode: The HTTP status code of the API response (optional).
+    ///   - body: The page of categories returned by the server (optional).
+    ///   - error: An error message if any (optional).
+    public init(
+        status: ResponseStatus, statusCode: StatusCode?, body: CategoriesData?,
+        error: ResponseError?
+    ) {
+        self.status = status
+        self.statusCode = statusCode
+        self.body = body
+        self.error = error
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.status = try container.decodeIfPresent(ResponseStatus.self, forKey: .status) ?? .success
+        self.statusCode = try container.decodeIfPresent(StatusCode.self, forKey: .statusCode)
+        self.error = try container.decodeIfPresent(ResponseError.self, forKey: .error)
+        // Error replies aren't category-shaped and must still surface their `error`.
+        self.body = try? CategoriesData(from: decoder)
     }
 }
 

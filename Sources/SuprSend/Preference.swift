@@ -83,7 +83,6 @@ public class Preferences {
     struct UpdateCategoryParams {
         let category: String
         let body: RequestPayload
-        let subCategory: Category
         let args: Args?
     }
 
@@ -118,7 +117,6 @@ public class Preferences {
             _ = await self?._updateCategoryPreferences(
                 category: params.category,
                 body: .init(params.body),
-                subCategory: params.subCategory,
                 args: params.args
             )
         }
@@ -224,7 +222,7 @@ public class Preferences {
     /// Used to get categories.
     /// - Parameters:
     ///   - args: Arguments for the request. Defaults to `nil`.
-    public func getCategories(args: CategoryArgs? = nil) async -> APIResponse {
+    public func getCategories(args: CategoryArgs? = nil) async -> CategoriesAPIResponse {
         let queryParams: [String: Any?] = [
             "tenant_id": args?.tenantId ?? config.tenantId,
             "show_opt_out_channels": "\(args?.showOptOutChannels ?? true)",
@@ -244,7 +242,9 @@ public class Preferences {
     /// - Parameters:
     ///   - category: The ID of the category to retrieve. Defaults to `nil`.
     ///   - args: Arguments for the request. Defaults to an empty dictionary.
-    public func getCategory(category: String, args: Args? = nil) async -> APIResponse {
+    public func getCategory(category: String, args: Args? = nil) async -> CategoryAPIResponse {
+        guard !category.isEmpty else { return Self.missingParameter("Category") }
+
         let questionParams: [String: Any?] = [
             "tenant_id": args?.tenantId ?? config.tenantId,
             "show_opt_out_channels": "\(args?.showOptOutChannels ?? true)",
@@ -260,7 +260,7 @@ public class Preferences {
     /// - Parameters:
     ///   - args: Arguments for the request. Only `tenantId` is honoured here;
     ///     other fields on ``Args`` are ignored. Defaults to `nil`.
-    public func getOverallChannelPreferences(args: Args? = nil) async -> APIResponse {
+    public func getOverallChannelPreferences(args: Args? = nil) async -> PreferenceAPIResponse {
         let queryParams: [String: Any?] = [
             "tenant_id": args?.tenantId ?? config.tenantId
         ]
@@ -272,9 +272,8 @@ public class Preferences {
     private func _updateCategoryPreferences(
         category: String,
         body: AnyEncodable,
-        subCategory: Category,
         args: Args? = nil
-    ) async -> PreferenceAPIResponse {
+    ) async -> CategoryAPIResponse {
         let queryParams: [String: Any?] = [
             "tenant_id": args?.tenantId ?? preferenceArgs?.tenantId ?? config.tenantId,
             "show_opt_out_channels": "\(resolveShowOptOutChannels(args))",
@@ -284,7 +283,7 @@ public class Preferences {
 
         let path = getUrlpath(path: "category/\(category)", qp: queryParams)
 
-        let response: PreferenceAPIResponse = await config.client().request(
+        let response: CategoryAPIResponse = await config.client().request(
             reqData: .init(
                 path: path.absoluteString,
                 payload: body,
@@ -294,7 +293,19 @@ public class Preferences {
 
         guard !Task.isCancelled else { return response }
 
-        await emitUpdateResult(response)
+        guard response.error == nil else {
+            config.emitter.emit(event: .preferencesError, data: .error(response.error, statusCode: response.statusCode))
+            return response
+        }
+
+        // Merge instead of refetching, like the web SDK, so pending edits on other categories survive.
+        if let updated = response.body,
+           args?.tenantId == preferenceArgs?.tenantId,
+           case .found(let local) = findCategory(category) {
+            local.merge(from: updated)
+        }
+
+        config.emitter.emit(event: .preferencesUpdated, data: .success(statusCode: response.statusCode, body: data))
         return response
     }
 
@@ -317,18 +328,14 @@ public class Preferences {
 
         guard !Task.isCancelled else { return response }
 
-        await emitUpdateResult(response)
-        return response
-    }
-
-    private func emitUpdateResult(_ response: PreferenceAPIResponse) async {
         if response.error != nil {
             config.emitter.emit(event: .preferencesError, data: response)
-            return
+            return response
         }
         // Emit the local store like the web SDK; a failed refresh must not surface as an update.
         _ = await getPreferences(args: preferenceArgs)
         config.emitter.emit(event: .preferencesUpdated, data: .success(statusCode: 200, body: data))
+        return response
     }
 
     /// Used to update user's category level preference.
@@ -341,6 +348,7 @@ public class Preferences {
         preference: PreferenceOptions,
         args: Args? = nil
     ) -> PreferenceAPIResponse {
+        guard !category.isEmpty else { return Self.missingParameter("Category") }
 
         guard let data else {
             return .error(
@@ -414,7 +422,6 @@ public class Preferences {
             payload: .init(
                 category: category,
                 body: requestPayload,
-                subCategory: categoryData,
                 args: resolvedArgs(args, showOptOutChannels: showOptOutChannels)
             )
         )
@@ -433,7 +440,10 @@ public class Preferences {
         preference: PreferenceOptions,
         category: String,
         args: Args? = nil
-    ) async -> PreferenceAPIResponse {
+    ) -> PreferenceAPIResponse {
+        guard !channel.isEmpty else { return Self.missingParameter("Channel") }
+        guard !category.isEmpty else { return Self.missingParameter("Category") }
+
         guard let data else {
             return .error(
                 .init(
@@ -527,7 +537,6 @@ public class Preferences {
             payload: .init(
                 category: category,
                 body: requestPayload,
-                subCategory: categoryData,
                 args: resolvedArgs(args, showOptOutChannels: showOptOutChannels)
             )
         )
@@ -540,18 +549,20 @@ public class Preferences {
     ///   - category: The ID of the category to update.
     ///   - digestSchedule: The schedule fields to apply. `id` must match the category's ``Category/digestSchedule``.
     ///   - args: Arguments for the request. Defaults to `nil`.
+    /// - Returns: The server's updated category, which is also merged into the local preference data.
     public func updateDigestScheduleInCategory(
         category: String,
         digestSchedule: UpdateCategoryDigestSchedulePayload,
         args: Args? = nil
-    ) async -> PreferenceAPIResponse {
+    ) async -> CategoryAPIResponse {
+        guard !category.isEmpty else { return Self.missingParameter("Category") }
+
         switch findCategory(category) {
-        case .failed(let response):
-            return response
+        case .failed(let error):
+            return .error(error)
         case .found(let categoryData):
             return await sendCategoryUpdate(
                 category: category,
-                categoryData: categoryData,
                 payload: DigestScheduleRequestPayload(
                     digestSchedule: digestSchedule, preference: categoryData.preference),
                 args: args
@@ -564,18 +575,20 @@ public class Preferences {
     ///   - category: The ID of the category to update.
     ///   - properties: Property values to apply. Keys come from the category's ``Category/properties``.
     ///   - args: Arguments for the request. Defaults to `nil`.
+    /// - Returns: The server's updated category, which is also merged into the local preference data.
     public func updatePropertiesInCategory(
         category: String,
         properties: [UpdateCategoryPropertyPayload],
         args: Args? = nil
-    ) async -> PreferenceAPIResponse {
+    ) async -> CategoryAPIResponse {
+        guard !category.isEmpty else { return Self.missingParameter("Category") }
+
         switch findCategory(category) {
-        case .failed(let response):
-            return response
+        case .failed(let error):
+            return .error(error)
         case .found(let categoryData):
             return await sendCategoryUpdate(
                 category: category,
-                categoryData: categoryData,
                 payload: PropertiesRequestPayload(
                     properties: properties, preference: categoryData.preference),
                 args: args
@@ -585,39 +598,37 @@ public class Preferences {
 
     private enum CategoryLookup {
         case found(Category)
-        case failed(PreferenceAPIResponse)
+        case failed(ResponseError)
+    }
+
+    private static func missingParameter<R: Response>(_ name: String) -> R {
+        .error(.init(type: .validation, message: "\(name) parameter is missing"))
     }
 
     private func findCategory(_ category: String) -> CategoryLookup {
         guard let data else {
-            return .failed(
-                .error(
-                    .init(
-                        type: .validation,
-                        message: "Call getPreferences method before performing action")))
+            return .failed(.init(type: .validation, message: "Call getPreferences method before performing action"))
         }
         guard let sections = data.sections else {
-            return .failed(.error(.init(type: .validation, message: "Sections doesn't exist")))
+            return .failed(.init(type: .validation, message: "Sections doesn't exist"))
         }
         for section in sections {
             if let match = section.subcategories?.first(where: { $0.category == category }) {
                 return .found(match)
             }
         }
-        return .failed(.error(.init(type: .validation, message: "Category not found")))
+        return .failed(.init(type: .validation, message: "Category not found"))
     }
 
     private func sendCategoryUpdate<Payload: Encodable>(
         category: String,
-        categoryData: Category,
         payload: Payload,
         args: Args?
-    ) async -> PreferenceAPIResponse {
+    ) async -> CategoryAPIResponse {
         let showOptOutChannels = resolveShowOptOutChannels(args)
         return await _updateCategoryPreferences(
             category: category,
             body: .init(payload),
-            subCategory: categoryData,
             args: resolvedArgs(args, showOptOutChannels: showOptOutChannels)
         )
     }
@@ -631,6 +642,7 @@ public class Preferences {
         preference: ChannelLevelPreferenceOptions,
         args: Args? = nil
     ) -> PreferenceAPIResponse {
+        guard !channel.isEmpty else { return Self.missingParameter("Channel") }
 
         guard let data else {
             return .error(
