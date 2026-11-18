@@ -59,15 +59,13 @@ final class PreferenceViewModel: ObservableObject {
     func updateChannelInCategory(_ channel: SuprSend.CategoryChannel, in category: SuprSend.Category) {
         guard channel.isEditable else { return }
         let next: PreferenceOptions = channel.preference == .optIn ? .optOut : .optIn
-        Task { @MainActor in
-            let resp = await SuprSend.shared.user.preferences.updateChannelPreferenceInCategory(
-                channel: channel.channel,
-                preference: next,
-                category: category.category,
-                args: .init(tenantId: tenant)
-            )
-            if let body = resp.body { preferenceData = body }
-        }
+        let resp = SuprSend.shared.user.preferences.updateChannelPreferenceInCategory(
+            channel: channel.channel,
+            preference: next,
+            category: category.category,
+            args: .init(tenantId: tenant)
+        )
+        if let body = resp.body { preferenceData = body }
     }
 
     func updateOverallChannel(_ channel: SuprSend.ChannelPreference, restricted: Bool) {

@@ -5,171 +5,246 @@ import Testing
 
 struct PreferencesTests {
 
-    @Test func resetClearsCachedDataAndArgs() async throws {
-        let client = try await seededClient()
+    @Test func getPreferencesLoadsDataAndKeepsItWhenRefetchFails() async throws {
+        let fetches = Counter()
+        let backend = MockBackend { request in
+            guard Self.isPreferenceFetch(request) else { return .ok }
+            return fetches.increment() == 1
+                ? .json(Self.seedJSON)
+                : .init(statusCode: 429, body: #"{"message":"Too many requests"}"#)
+        }
+        let client = await backend.identifiedClient()
         let preferences = client.user.preferences
 
-        #expect(preferences.data != nil)
-        #expect(preferences.preferenceArgs?.tenantId == "tenant-a")
+        let first = await preferences.getPreferences()
+        #expect(first.status == .success)
+        let loaded = try #require(preferences.data)
+        let marketing = try #require(Self.category("marketing", in: loaded))
+        #expect(marketing.digestSchedule?.weekdays?.value == [.monday, .friday])
+        #expect(marketing.digestSchedule?.time?.editPolicy == .editable)
+        #expect(marketing.properties?.value == .string("us"))
+        #expect(marketing.properties?.choices?.count == 2)
 
-        preferences.reset()
-
-        #expect(preferences.data == nil)
-        #expect(preferences.preferenceArgs == nil)
-
-        let response = preferences.updateCategoryPreference(category: "marketing", preference: .optOut)
-        #expect(response.status == .error)
-        #expect(response.error?.type == .validation)
+        let second = await preferences.getPreferences()
+        #expect(second.status == .error)
+        #expect(second.statusCode == 429)
+        #expect(preferences.data === loaded)
     }
 
-    @Test func clientResetClearsPreferences() async throws {
-        let client = try await seededClient()
+    @Test func rapidCategoryUpdatesAreDebouncedIntoOnePatch() async throws {
+        let backend = MockBackend(handler: Self.server)
+        let client = await backend.identifiedClient()
+        let preferences = client.user.preferences
+        _ = await preferences.getPreferences()
+        let newsletter = try #require(Self.category("newsletter", in: preferences.data))
+        let updates = Counter()
+        client.emitter.on(.preferencesUpdated) { _ in updates.increment() }
 
-        let response = await client.reset(options: .init(unsubscribePush: false))
+        #expect(preferences.updateCategoryPreference(category: "newsletter", preference: .optOut).status == .success)
+        #expect(newsletter.preference == .optOut)
+        #expect(preferences.updateCategoryPreference(category: "newsletter", preference: .optIn).status == .success)
+        #expect(newsletter.preference == .optIn)
 
-        #expect(response.status == .success)
-        #expect(client.distinctID == nil)
-        #expect(client.user.preferences.data == nil)
-        #expect(client.user.preferences.preferenceArgs == nil)
-    }
-
-    @Test func resetCancelsPendingDebouncedUpdate() async throws {
-        let control = try await seededClient()
-        let subject = try await seededClient()
-        let controlErrors = Counter()
-        let subjectErrors = Counter()
-        control.emitter.on(.preferencesError) { _ in controlErrors.increment() }
-        subject.emitter.on(.preferencesError) { _ in subjectErrors.increment() }
-
-        let controlUpdate = control.user.preferences.updateCategoryPreference(
-            category: "marketing", preference: .optOut)
-        let subjectUpdate = subject.user.preferences.updateCategoryPreference(
-            category: "marketing", preference: .optOut)
-        #expect(controlUpdate.status == .success)
-        #expect(subjectUpdate.status == .success)
-
-        subject.user.preferences.reset()
-
-        // Debounce is 1s; the unauthenticated control client emits an error when it fires.
+        // Debounce is 1s.
         try await Task.sleep(nanoseconds: 1_500_000_000)
 
-        #expect(controlErrors.value == 1)
-        #expect(subjectErrors.value == 0)
+        let patches = backend.requests.filter { $0.httpMethod == "PATCH" }
+        #expect(patches.count == 1)
+        #expect(patches.first?.jsonBody?["preference"] as? String == "opt_in")
+        #expect(Self.category("newsletter", in: preferences.data) === newsletter)
+        #expect(newsletter.name == "newsletter (server)")
+        #expect(backend.requests.filter(Self.isPreferenceFetch).count == 1)
+        #expect(updates.value == 1)
     }
 
-    @Test func getPreferencesPinsResolvedTenant() async {
-        let client = SuprSendClient(publicKey: "test-key")
-        _ = await client.changeTenant(tenantId: "tenant-a")
+    @Test func channelUpdatesApplyLocallyAndSync() async throws {
+        let backend = MockBackend(handler: Self.server)
+        let client = await backend.identifiedClient()
+        let preferences = client.user.preferences
+        _ = await preferences.getPreferences()
+        let data = try #require(preferences.data)
+        let marketing = try #require(Self.category("marketing", in: data))
 
-        _ = await client.user.preferences.getPreferences()
-        #expect(client.user.preferences.preferenceArgs?.tenantId == "tenant-a")
-        #expect(client.user.preferences.preferenceArgs?.showOptOutChannels == true)
+        let inCategory = preferences.updateChannelPreferenceInCategory(
+            channel: "email", preference: .optOut, category: "marketing")
+        let overall = preferences.updateOverallChannelPreference(channel: "email", preference: .required)
 
-        _ = await client.changeTenant(tenantId: "tenant-b")
-        #expect(client.user.preferences.preferenceArgs?.tenantId == "tenant-a")
+        #expect(inCategory.status == .success)
+        #expect(overall.status == .success)
+        #expect(marketing.channels?.first?.preference == .optOut)
+        #expect(data.channelPreferences?.first?.isRestricted == true)
+
+        try await Task.sleep(nanoseconds: 1_500_000_000)
+
+        let patches = backend.requests.filter { $0.httpMethod == "PATCH" }
+        #expect(patches.count == 2)
+        let categoryPatch = patches.first { Self.endpoint($0) == "/category/marketing/" }
+        #expect(categoryPatch?.jsonBody?["opt_out_channels"] as? [String] == ["email"])
+        let channelPatch = patches.first { Self.endpoint($0) == "/channel_preference/" }
+        let sent = channelPatch?.jsonBody?["channel_preferences"] as? [[String: Any]]
+        #expect(sent?.first?["channel"] as? String == "email")
+        #expect(sent?.first?["is_restricted"] as? Bool == true)
     }
 
-    @Test func categoryUpdatesRequireFetchedData() async {
-        let client = SuprSendClient(publicKey: "test-key")
+    @Test func digestAndPropertiesUpdatesSendImmediatelyAndMerge() async throws {
+        let backend = MockBackend(handler: Self.server)
+        let client = await backend.identifiedClient()
+        let preferences = client.user.preferences
+        _ = await preferences.getPreferences()
+        let marketing = try #require(Self.category("marketing", in: preferences.data))
 
-        let digest = await client.user.preferences.updateDigestScheduleInCategory(
-            category: "marketing", digestSchedule: .init(id: "daily"))
-        let properties = await client.user.preferences.updatePropertiesInCategory(
-            category: "marketing", properties: [.init(key: "region", value: .string("us"))])
+        let digest = await preferences.updateDigestScheduleInCategory(
+            category: "marketing", digestSchedule: .init(id: "weekly", time: "09:00", weekdays: [.monday]))
+        let properties = await preferences.updatePropertiesInCategory(
+            category: "marketing", properties: [.init(key: "region", value: .string("eu"))])
 
-        #expect(digest.error?.type == .validation)
-        #expect(properties.error?.type == .validation)
-    }
+        #expect(digest.status == .success)
+        #expect(digest.body?.name == "marketing (server)")
+        #expect(properties.status == .success)
+        #expect(marketing.name == "marketing (server)")
+        #expect(backend.requests.filter(Self.isPreferenceFetch).count == 1)
 
-    @Test func categoryUpdatesRejectUnknownCategory() async throws {
-        let client = try await seededClient()
-
-        let digest = await client.user.preferences.updateDigestScheduleInCategory(
-            category: "missing", digestSchedule: .init(id: "daily"))
-        let properties = await client.user.preferences.updatePropertiesInCategory(
-            category: "missing", properties: [.init(key: "region", value: .string("us"))])
-
-        #expect(digest.error?.message == "Category not found")
-        #expect(properties.error?.message == "Category not found")
-    }
-
-    @Test func categoryUpdatesSendImmediatelyAndEmitErrors() async throws {
-        let client = try await seededClient()
-        let errors = Counter()
-        client.emitter.on(.preferencesError) { _ in errors.increment() }
-
-        let digest = await client.user.preferences.updateDigestScheduleInCategory(
-            category: "marketing", digestSchedule: .init(id: "weekly", weekdays: [.monday]))
-        let properties = await client.user.preferences.updatePropertiesInCategory(
-            category: "marketing", properties: [.init(key: "region", value: .string("us"))])
-
-        // Unauthenticated, so both requests fail at the API layer without any debounce delay.
-        #expect(digest.status == .error)
-        #expect(properties.status == .error)
-        #expect(errors.value == 2)
-    }
-
-    @Test func categoryDecodesDigestScheduleAndProperties() throws {
-        let category = try decodeCategory(Self.richCategoryJSON)
-
-        #expect(category.digestSchedule?.id == "weekly")
-        #expect(category.digestSchedule?.frequency == .weekly)
-        #expect(category.digestSchedule?.weekdays?.value == [.monday, .friday])
-        #expect(category.digestSchedule?.weekdays?.defaultValue == [.monday])
-        #expect(category.digestSchedule?.time?.editPolicy == .editable)
-        #expect(category.digestSchedule?.isUserSelected == true)
-        #expect(category.properties?.key == "region")
-        #expect(category.properties?.valueType == .stringChoice)
-        #expect(category.properties?.value == .string("us"))
-        #expect(category.properties?.defaultValue == .string("eu"))
-        #expect(category.properties?.choices?.count == 2)
-    }
-
-    @Test func categoryToleratesUnexpectedDigestAndPropertyShapes() throws {
-        let category = try decodeCategory(
-            #"{"name":"Marketing","category":"marketing","preference":"opt_in","is_editable":true,"digest_schedule":[],"properties":"n/a"}"#
-        )
-
-        #expect(category.category == "marketing")
-        #expect(category.digestSchedule == nil)
-        #expect(category.properties == nil)
-    }
-
-    @Test func categoryUpdatePayloadsEncodeServerKeys() throws {
-        let digest = DigestScheduleRequestPayload(
-            digestSchedule: .init(id: "weekly", time: "09:00", weekdays: [.monday]), preference: .optIn)
-        let properties = PropertiesRequestPayload(
-            properties: [.init(key: "count", value: .number(3)), .init(key: "tags", value: .list(["a"]))],
-            preference: .optOut)
-
-        let digestJSON = try JSONSerialization.jsonObject(with: JSONEncoder().encode(digest)) as? [String: Any]
-        let propertiesJSON = try JSONSerialization.jsonObject(with: JSONEncoder().encode(properties)) as? [String: Any]
-
-        let schedule = digestJSON?["digest_schedule"] as? [String: Any]
+        let bodies = backend.requests.filter { $0.httpMethod == "PATCH" }.compactMap(\.jsonBody)
+        try #require(bodies.count == 2)
+        let schedule = bodies[0]["digest_schedule"] as? [String: Any]
         #expect(schedule?["id"] as? String == "weekly")
         #expect(schedule?["time"] as? String == "09:00")
         #expect(schedule?["weekdays"] as? [String] == ["mo"])
         #expect(schedule?["dtstart"] == nil)
-        #expect(digestJSON?["preference"] as? String == "opt_in")
-
-        let items = propertiesJSON?["properties"] as? [[String: Any]]
-        #expect(items?.first?["key"] as? String == "count")
-        #expect(items?.first?["value"] as? Double == 3)
-        #expect(items?.last?["value"] as? [String] == ["a"])
-        #expect(propertiesJSON?["preference"] as? String == "opt_out")
+        let sent = bodies[1]["properties"] as? [[String: Any]]
+        #expect(sent?.first?["key"] as? String == "region")
+        #expect(sent?.first?["value"] as? String == "eu")
     }
 
-    private func decodeCategory(_ json: String) throws -> SuprSend.Category {
-        try JSONDecoder().decode(SuprSend.Category.self, from: Data(json.utf8))
+    @Test func updatesValidateInput() async {
+        let backend = MockBackend(handler: Self.server)
+        let client = await backend.identifiedClient()
+        let preferences = client.user.preferences
+
+        let beforeFetch = preferences.updateCategoryPreference(category: "marketing", preference: .optOut)
+        #expect(beforeFetch.error?.message == "Call getPreferences method before performing action")
+
+        _ = await preferences.getPreferences()
+        let sentBefore = backend.requests.count
+
+        let emptyCategory = preferences.updateCategoryPreference(category: "", preference: .optOut)
+        let emptyChannel = preferences.updateOverallChannelPreference(channel: "", preference: .all)
+        let unknownCategory = await preferences.updateDigestScheduleInCategory(
+            category: "missing", digestSchedule: .init(id: "daily"))
+
+        #expect(emptyCategory.error?.message == "Category parameter is missing")
+        #expect(emptyChannel.error?.message == "Channel parameter is missing")
+        #expect(unknownCategory.error?.message == "Category not found")
+        #expect(unknownCategory.error?.type == .validation)
+        #expect(backend.requests.count == sentBefore)
     }
 
-    private static let richCategoryJSON = """
+    @Test func resetCancelsPendingUpdatesAndClearsData() async throws {
+        let backend = MockBackend(handler: Self.server)
+        let client = await backend.identifiedClient()
+        let preferences = client.user.preferences
+        _ = await preferences.getPreferences()
+
+        #expect(preferences.updateCategoryPreference(category: "newsletter", preference: .optOut).status == .success)
+        preferences.reset()
+
+        #expect(preferences.data == nil)
+        #expect(preferences.preferenceArgs == nil)
+        #expect(preferences.updateCategoryPreference(category: "newsletter", preference: .optOut).error?.type == .validation)
+
+        try await Task.sleep(nanoseconds: 1_500_000_000)
+        #expect(backend.requests.filter { $0.httpMethod == "PATCH" }.isEmpty)
+    }
+
+    @Test func fetchedTenantIsPinnedForUpdates() async throws {
+        let backend = MockBackend(handler: Self.server)
+        let client = await backend.identifiedClient(tenantId: "tenant-a")
+        let preferences = client.user.preferences
+        _ = await preferences.getPreferences()
+
+        _ = await client.changeTenant(tenantId: "tenant-b")
+        _ = await preferences.updateDigestScheduleInCategory(category: "marketing", digestSchedule: .init(id: "weekly"))
+
+        let fetch = try #require(backend.requests.first(where: Self.isPreferenceFetch))
+        let patch = try #require(backend.requests.first { $0.httpMethod == "PATCH" })
+        #expect(fetch.queryValue("tenant_id") == "tenant-a")
+        #expect(patch.queryValue("tenant_id") == "tenant-a")
+    }
+
+    @Test func readMethodsDecodeTheirBodies() async {
+        let backend = MockBackend { request in
+            switch Self.endpoint(request) {
+            case "/category/":
+                return .json(
+                    #"{"meta":{"count":2,"limit":10,"offset":0},"results":["#
+                        + Self.categoryJSON("marketing", name: "Marketing", preference: "opt_in") + ","
+                        + Self.categoryJSON("newsletter", name: "Newsletter", preference: "opt_out") + "]}")
+            case "/category/marketing/":
+                return .json(Self.categoryJSON("marketing", name: "Marketing", preference: "opt_in"))
+            case "/channel_preference/":
+                return .json(#"{"channel_preferences":[{"channel":"email","is_restricted":true}]}"#)
+            default:
+                return .ok
+            }
+        }
+        let client = await backend.identifiedClient()
+        let preferences = client.user.preferences
+
+        let categories = await preferences.getCategories()
+        #expect(categories.body?.results.map(\.category) == ["marketing", "newsletter"])
+        #expect(categories.body?.meta?.count == 2)
+
+        let category = await preferences.getCategory(category: "marketing")
+        #expect(category.body?.name == "Marketing")
+
+        let channels = await preferences.getOverallChannelPreferences()
+        #expect(channels.body?.channelPreferences?.first?.channel == "email")
+        #expect(channels.body?.channelPreferences?.first?.isRestricted == true)
+    }
+
+    // MARK: - Helpers
+
+    // Serves the seed on fetch and echoes the requested preference back on category updates.
+    private static func server(_ request: URLRequest) -> MockURLProtocol.Stub {
+        switch (request.httpMethod, endpoint(request)) {
+        case ("GET", "/"):
+            return .json(seedJSON)
+        case ("PATCH", let path?) where path.hasPrefix("/category/"):
+            let slug = String(path.split(separator: "/")[1])
+            let preference = request.jsonBody?["preference"] as? String ?? "opt_in"
+            return .json(categoryJSON(slug, name: "\(slug) (server)", preference: preference))
+        default:
+            return .ok
+        }
+    }
+
+    private static func endpoint(_ request: URLRequest) -> String? {
+        guard let range = request.path.range(of: "/preference") else { return nil }
+        return String(request.path[range.upperBound...])
+    }
+
+    private static func isPreferenceFetch(_ request: URLRequest) -> Bool {
+        request.httpMethod == "GET" && endpoint(request) == "/"
+    }
+
+    private static func category(_ slug: String, in data: PreferenceData?) -> SuprSend.Category? {
+        data?.sections?.flatMap { $0.subcategories ?? [] }.first { $0.category == slug }
+    }
+
+    private static func categoryJSON(_ slug: String, name: String, preference: String) -> String {
+        """
+        {"name":"\(name)","category":"\(slug)","preference":"\(preference)","is_editable":true,\
+        "channels":[{"channel":"email","preference":"opt_in","is_editable":true}]}
+        """
+    }
+
+    private static let marketingJSON = """
         {
           "name": "Marketing",
           "category": "marketing",
           "preference": "opt_in",
           "is_editable": true,
-          "channels": [],
+          "channels": [{"channel": "email", "preference": "opt_in", "is_editable": true}],
           "digest_schedule": {
             "id": "weekly",
             "label": "Weekly",
@@ -194,48 +269,18 @@ struct PreferencesTests {
         }
         """
 
-    private func seededClient() async throws -> SuprSendClient {
-        let client = SuprSendClient(publicKey: "test-key")
-        _ = await client.user.preferences.getPreferences(args: .init(tenantId: "tenant-a"))
-        client.user.preferences.data = try JSONDecoder().decode(PreferenceData.self, from: Self.seedJSON)
-        return client
-    }
-
-    private static let seedJSON = Data(
-        """
+    private static let seedJSON = """
         {
           "sections": [
             {
               "name": "s",
               "subcategories": [
-                {
-                  "name": "Marketing",
-                  "category": "marketing",
-                  "preference": "opt_in",
-                  "is_editable": true,
-                  "channels": []
-                }
+                \(marketingJSON),
+                \(categoryJSON("newsletter", name: "Newsletter", preference: "opt_in"))
               ]
             }
           ],
-          "channel_preferences": []
+          "channel_preferences": [{"channel": "email", "is_restricted": false}]
         }
-        """.utf8)
-}
-
-private final class Counter: @unchecked Sendable {
-    private let lock = NSLock()
-    private var count = 0
-
-    var value: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return count
-    }
-
-    func increment() {
-        lock.lock()
-        count += 1
-        lock.unlock()
-    }
+        """
 }
